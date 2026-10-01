@@ -4,56 +4,56 @@ import type { Body, Point } from '../physics/matter';
 
 export type Bar = { id: number; x: number; y: number; halfWidth: number; body: Body };
 
-/** Flat side-view scenery. Solid bars also supply the auto-grab anchors. */
+/** The shaded park is scenery only. Bars, ground and Nuro share one 2D plane. */
 export class TrainingLevel {
   readonly bars: Bar[] = [];
   private readonly shadow: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     const backdrop = scene.add.graphics().setDepth(-5);
-    backdrop.fillStyle(0xe2e7de, 0.7);
-    for (let x = TRAINING.left; x <= TRAINING.right; x += 100) {
-      backdrop.fillRect(x, 850, 1, 4);
+    // Distant rounded hills and shaded tree crowns suggest volume without any
+    // depth coordinate, perspective transform or collision in the background.
+    backdrop.fillStyle(0xc7dfd0).fillEllipse(700, 510, 1600, 240);
+    backdrop.fillStyle(0xbad5bf).fillEllipse(1650, 510, 1400, 180);
+    for (const [x, y, size] of [[330, 375, 55], [590, 410, 38], [1240, 390, 46], [1510, 355, 65]]) {
+      backdrop.fillStyle(0xa2b6a2).fillRect(x - 5, y, 10, TRAINING.groundY - y);
+      backdrop.fillStyle(0xa4c8af).fillEllipse(x + 7, y - 18, size * 1.35, size * 1.8);
+      backdrop.fillStyle(0xbdd8b8).fillEllipse(x - 9, y - 27, size, size * 1.45);
+      backdrop.fillStyle(0xd2e5c7, 0.75).fillEllipse(x - 15, y - 42, size * 0.5, size * 0.65);
     }
+
     const scenery = scene.add.graphics().setDepth(-3);
+    const width = TRAINING.right - TRAINING.left;
+    scenery.fillStyle(0x9cbd73).fillRect(TRAINING.left, TRAINING.groundY, width, 1800);
+    scenery.fillStyle(0xb8d78a).fillRect(TRAINING.left, TRAINING.groundY, width, 7);
+    scene.matter.add.rectangle((TRAINING.left + TRAINING.right) / 2, TRAINING.groundY + 100, width, 200, {
+      isStatic: true, label: 'ground', friction: 0.8, restitution: 0.02,
+    });
+
     for (let i = 0; i < BARS.length; i++) {
       const spec = BARS[i];
       const body = scene.matter.add.rectangle(spec.x, spec.y, spec.halfWidth * 2, TRAINING.barHeight, {
-        isStatic: true,
-        isSensor: false,
-        label: `bar:${i}`,
-        chamfer: { radius: 7 },
-        friction: 0.12,
-        frictionStatic: 0.2,
-        restitution: 0.08,
-        slop: 0.01,
+        isStatic: true, isSensor: false, label: `bar:${i}`,
+        chamfer: { radius: 7 }, friction: 0.12, frictionStatic: 0.2, restitution: 0.08, slop: 0.01,
       });
       this.bars.push({ ...spec, id: i, body });
-      const floor = spec.y + TRAINING.platformDrop;
-      // Flat support outline; only the short, clearly outlined bar is the apparatus collider.
-      scenery.lineStyle(2, 0xc1cdc2).lineBetween(spec.x, spec.y + TRAINING.barHeight / 2, spec.x, floor);
-      scenery.lineStyle(2, 0xd5ddd0).lineBetween(spec.x - 70, floor, spec.x, floor - 145);
-      scenery.lineBetween(spec.x + 70, floor, spec.x, floor - 145);
-      scenery.fillStyle(0xd8e1d0).fillRoundedRect(spec.x - 101, floor, 202, 22, 4);
-      scenery.lineStyle(2, 0xa9bba0).lineBetween(spec.x - 98, floor, spec.x + 98, floor);
+      // Side-view apparatus. The muted upright is behind the play plane;
+      // the outlined crossbar is the solid collider and the two-hand grip anchor.
+      scenery.lineStyle(6, 0x9bafa6).lineBetween(spec.x, spec.y + 9, spec.x, TRAINING.groundY);
+      scenery.lineStyle(3, 0xb8c7bc).lineBetween(spec.x - 1, spec.y + 10, spec.x - 1, TRAINING.groundY);
+      scenery.fillStyle(0x829968).fillEllipse(spec.x + 5, TRAINING.groundY + 5, 46, 8);
       scenery.fillStyle(COLORS.ink).fillRoundedRect(spec.x - spec.halfWidth, spec.y - TRAINING.barHeight / 2, spec.halfWidth * 2, TRAINING.barHeight, 7);
       scenery.lineStyle(2, 0x70938a).strokeRoundedRect(spec.x - spec.halfWidth, spec.y - TRAINING.barHeight / 2, spec.halfWidth * 2, TRAINING.barHeight, 7);
       scenery.lineStyle(2, COLORS.lime).lineBetween(spec.x - 7, spec.y, spec.x + 7, spec.y);
-      scene.matter.add.rectangle(spec.x, floor + 11, 202, 22, {
-        isStatic: true, label: `platform:${i}`, friction: 0.8, restitution: 0.02, chamfer: { radius: 4 },
-      });
     }
     this.shadow = scene.add.graphics().setDepth(-2);
   }
 
   render(center: Point): void {
     this.shadow.clear();
-    for (const bar of this.bars) {
-      const floor = bar.y + TRAINING.platformDrop;
-      const height = floor - center.y;
-      if (height < 0 || Math.abs(center.x - bar.x) > 80) continue;
-      this.shadow.fillStyle(0x819574, Math.max(0.025, 0.12 - height * 0.00018));
-      this.shadow.fillEllipse(center.x, floor + 3, 25 + height * 0.06, 5);
-    }
+    const height = TRAINING.groundY - center.y;
+    if (height < 0) return;
+    this.shadow.fillStyle(0x547842, Math.max(0.035, 0.16 - height * 0.00022));
+    this.shadow.fillEllipse(center.x, TRAINING.groundY + 5, 28 + height * 0.08, 7);
   }
 }

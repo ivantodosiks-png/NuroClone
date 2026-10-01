@@ -116,10 +116,8 @@ export class GameScene extends Phaser.Scene {
         const step = PHYSICS.stepMs / substeps;
         for (let i = 0; i < substeps; i++) {
           this.grabs.step(step);
-          const grounded = this.level.bars.some(bar => this.gymnast.bodies.some(b =>
-            b.bounds.max.x > bar.x - 100 && b.bounds.min.x < bar.x + 100
-            && b.bounds.max.y >= bar.y + TRAINING.platformDrop - 2
-            && b.bounds.min.y <= bar.y + TRAINING.platformDrop + 3));
+          const grounded = this.gymnast.bodies.some(b =>
+            b.bounds.max.y >= TRAINING.groundY - 2 && b.bounds.min.y <= TRAINING.groundY + 3);
           this.gymnast.step(this.controller.pose, this.grabs.anchor, this.controller.twist, grounded, step);
           this.matter.world.step(step);
         }

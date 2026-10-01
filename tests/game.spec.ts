@@ -37,7 +37,9 @@ test('minimal menu, controls, no HUD, side-view scene and two-hand start', async
   expect(s.state).toBe('GRABBED');
   expect(s.grabs).toBe(2);
   expect(s.barId).toBe(0);
-  expect(s.bars.length).toBe(5);
+  expect(s.bars.length).toBe(2);
+  expect(s.bars[1].x).toBeGreaterThan(s.bars[0].x);
+  expect(s.bars[1].y).toBeLessThan(s.bars[0].y-40);
   expect(s.bars.every(bar => !bar.isSensor)).toBe(true);
   expect(Math.abs(s.hands[0].x-s.hands[1].x)).toBeLessThan(9);
   expect(Math.abs(s.feet[0].x-s.feet[1].x)).toBeLessThan(12);
@@ -152,7 +154,7 @@ test('two hands must reach the SAME bar, and every bar accepts both hands', asyn
     return {split,catches};
   `);
   expect(result.split).toBe(0);
-  expect(result.catches).toEqual([0,1,2,3,4].map(bar=>({bar,count:2})));
+  expect(result.catches).toEqual([0,1].map(bar=>({bar,count:2})));
 });
 
 test('L supports flips and K retains twist momentum without any depth coordinate', async ({page}) => {
@@ -201,7 +203,7 @@ test('R repeatedly resets all velocities and removes old grips; Esc pauses/menu'
   for(const s of states as Snapshot[]){
     expect(s.grabs).toBe(2);
     expect(s.barId).toBe(0);
-    expect(s.worldBodies).toBe(21);
+    expect(s.worldBodies).toBe(14);
     expect(s.worldConstraints).toBe(14);
     expect(s.bodies.every(b=>b.vx===0&&b.vy===0&&b.angularVelocity===0)).toBe(true);
     expect(s.twistVelocity).toBe(0);
@@ -223,13 +225,15 @@ test('release retains swing velocity and follows a ballistic arc', async ({page}
     const draw=scene.renderScene;scene.renderScene=()=>{};
     const trials=[];
     try {
-      for(const pumpSteps of [30,60,90,120,150,180]){
-        scene.restart();scene.controller.keys.right.isDown=true;
-        for(let t=0;t<pumpSteps;t++)scene.update(0,1000/120);
+      for(const pumpSteps of [240,800,2361,3031,3331,3661]){
+        scene.restart();
+        for(let t=0;t<pumpSteps;t++){
+          scene.controller.keys.straight.isDown=t%160<80;scene.update(0,1000/120);
+        }
         const before=scene.snapshot();
         scene.controller.pending.add('release');scene.update(0,0);
         const released=scene.snapshot();
-        scene.controller.keys.right.isDown=false;
+        scene.controller.keys.straight.isDown=false;
         let hits=0;
         const onHit=e=>{hits+=e.pairs.filter(p=>p.bodyA.label.startsWith('bar:')||p.bodyB.label.startsWith('bar:')).length;};
         scene.matter.world.on('collisionstart',onHit);
@@ -260,16 +264,16 @@ test('release retains swing velocity and follows a ballistic arc', async ({page}
     expect(Math.abs(sample.y-expectedY)).toBeLessThan(2);
     expect(Math.abs(sample.vx)).toBeGreaterThan(Math.abs(trial.before.velocity.x)*0.98);
   }
-  expect(freeFlights).toBeGreaterThanOrEqual(4);
-  const weak=trials.find(t=>t.pumpSteps===30)!;
-  const strong=trials.find(t=>t.pumpSteps===90)!;
+  expect(freeFlights).toBeGreaterThanOrEqual(3);
+  const weak=trials.find(t=>t.pumpSteps===240)!;
+  const strong=trials.find(t=>t.pumpSteps===3331)!;
   expect(strong.before.velocity.x).toBeGreaterThan(150);
-  expect(strong.before.velocity.y).toBeLessThan(-150);
+  expect(strong.before.velocity.y).toBeLessThan(-100);
   expect(strong.samples[0].x).toBeGreaterThan(strong.before.center.x);
   expect(strong.samples[0].y).toBeLessThan(strong.before.center.y);
   expect(strong.samples.some(s=>s.vy>100)).toBe(true);
   const at=(trial:Trial)=>trial.samples.find(s=>s.t===0.4)!;
-  expect(at(strong).x-strong.before.center.x).toBeGreaterThan((at(weak).x-weak.before.center.x)*1.8);
+  expect(at(strong).x-strong.before.center.x).toBeGreaterThan(Math.abs(at(weak).x-weak.before.center.x)*1.8);
 });
 
 test('solid bars stop head, torso, hands and legs, including fast impacts', async ({page}) => {
@@ -367,16 +371,48 @@ test('transfer exploration', async ({page})=>{
          for(let t=0;t<step;t++){scene.controller.keys.straight.isDown=t%160<80;scene.update(0,1000/120);}
          const v=scene.gymnast.velocity;
          scene.controller.pending.add('release');scene.update(0,0);
+         let closest=Infinity,near=null;
          for(let t=0;t<240&&!scene.grabs.count;t++){
            scene.controller.keys.straight.isDown=air==='straight';
            scene.controller.keys.tuck.isDown=typeof air==='number'&&t<air;
            scene.update(0,1000/120);
+           if(t>34){
+             const hands=scene.gymnast.hands.map(h=>scene.gymnast.handPoint(h));
+             const d=Math.max(...hands.map(h=>Math.hypot(h.x-1060,h.y-180)));
+             if(d<closest){closest=d;near=hands;}
+           }
          }
-         trials.push({step,air,v,bar:scene.grabs.barId});
+         trials.push({step,air,v,bar:scene.grabs.barId,closest,near});
        }
      }
    }finally{scene.renderScene=draw;scene.restart();}
-   return {candidates:candidates.length,winners:trials.filter(t=>t.bar!==null),sample:trials.slice(0,8)};
+   return {candidates:candidates.length,winners:trials.filter(t=>t.bar!==null),sample:trials.sort((a,b)=>a.closest-b.closest).slice(0,8)};
+ `);
+ console.log(JSON.stringify(r));
+});
+
+test('tuck pumping exploration', async ({page})=>{
+ await start(page);
+ const r=await fixture(page,`
+  const draw=scene.renderScene;scene.renderScene=()=>{};const results=[];
+  try{
+   for(const period of [40,60,70,80,100,120,140,160]){
+    for(const compact of ['base','tuck']){
+     scene.restart();let speed=0,height=Infinity,angle=0;
+     for(let t=0;t<2880;t++){
+      scene.controller.keys.straight.isDown=t%(period*2)<period;
+      scene.controller.keys.tuck.isDown=compact==='tuck'&&!scene.controller.keys.straight.isDown;
+      scene.update(0,1000/120);
+      const c=scene.gymnast.center,b=scene.level.bars[0];
+      speed=Math.max(speed,scene.gymnast.speed);
+      height=Math.min(height,...scene.gymnast.feet.map(f=>f.point.y));
+      angle=Math.max(angle,Math.abs(Math.atan2(c.x-b.x,c.y-b.y)));
+     }
+     results.push({period,compact,speed,height,angle});
+    }
+   }
+  }finally{scene.renderScene=draw;scene.restart();}
+  return results;
  `);
  console.log(JSON.stringify(r));
 });

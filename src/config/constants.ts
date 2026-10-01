@@ -1,5 +1,5 @@
 export const COLORS = {
-  background: 0xf3f5ef,
+  background: 0xddeef4,
   ink: 0x193c4b,
   muted: 0x84958c,
   grid: 0xdde3d9,
@@ -37,16 +37,13 @@ export const PHYSICS = {
 // Side-view bars: the drawn capsule and the solid collider have identical bounds.
 export const BARS = [
   { x: 860, y: 242, halfWidth: 14 },
-  { x: 1130, y: 280, halfWidth: 14 },
-  { x: 1430, y: 235, halfWidth: 14 },
-  { x: 1760, y: 285, halfWidth: 14 },
-  { x: 2070, y: 205, halfWidth: 14 },
+  { x: 1060, y: 180, halfWidth: 14 },
 ];
 
 export const TRAINING = {
   bar: BARS[0],
   barHeight: 18,
-  platformDrop: 440,
+  groundY: 527,
   fallLimit: 1550,
   left: -1000,
   right: 4000,
