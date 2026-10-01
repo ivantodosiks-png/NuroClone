@@ -14,6 +14,9 @@ export const PHYSICS = {
   maxFrameMs: 50,
   pixelsPerMeter: 95,
   gravity: 0.95,
+  airDrag: 0.0002, // Matter frictionAir per nominal 60 Hz frame
+  linearDamping: 0.015, // per second; applied as a force, never a velocity reset
+  angularDamping: 0.025, // per second; applied as torque
   swingForce: 0.00085,
   rotationTorque: 0.10,
   legRaiseStrength: 7,

@@ -67,7 +67,7 @@ export class Gymnast {
       collisionFilter: { group: this.group },
       friction: 0.7,
       frictionStatic: 1,
-      frictionAir: 0.0008,
+      frictionAir: PHYSICS.airDrag,
       restitution: 0.06,
       slop: 0.02,
     };
@@ -94,7 +94,7 @@ export class Gymnast {
       pointB: { x: anchor.x - child.position.x, y: anchor.y - child.position.y },
       // Length constraints stay rigid; PD muscles damp relative joint rotation.
       // Large linear constraint damping incorrectly drains whole-body spin.
-      damping: 0.005,
+      damping: 0,
     });
     this.joints.push(constraint);
     const motor = new JointMotor(parent, child, constraint, rest, strength);
@@ -133,6 +133,13 @@ export class Gymnast {
     // Fixed total torque: tucking decreases actual planar inertia, increasing spin.
     const totalInertia = this.bodies.reduce((sum, body) => sum + body.inertia, 0);
     for (const body of this.bodies) {
+      // Gentle aerodynamic resistance. Matter velocity is normalized to 60 Hz;
+      // convert to px/ms and rad/ms for its force/torque integration.
+      Matter.Body.applyForce(body, body.position, {
+        x: -body.mass * body.velocity.x / (1000 / 60) * PHYSICS.linearDamping / 1000,
+        y: -body.mass * body.velocity.y / (1000 / 60) * PHYSICS.linearDamping / 1000,
+      });
+      body.torque -= body.inertia * body.angularVelocity / (1000 / 60) * PHYSICS.angularDamping / 1000;
       body.torque -= this.drive * PHYSICS.rotationTorque * body.inertia / totalInertia;
       if (gripAnchor && Math.abs(this.drive) > 0.001) {
         const dx = body.position.x - gripAnchor.x;
@@ -156,7 +163,7 @@ export class Gymnast {
   private stepTwist(pressed: boolean, grabbed: boolean, grounded: boolean, dt: number): void {
     const torque = pressed && !grounded ? PHYSICS.twistTorque : 0;
     this.axialMomentum += torque * dt;
-    this.axialMomentum *= Math.exp(-(grounded ? 12 : grabbed ? 9 : 0.025) * dt);
+    this.axialMomentum *= Math.exp(-(grounded ? 12 : grabbed ? 9 : PHYSICS.angularDamping) * dt);
     this.twistVelocity = this.axialMomentum / this.twistInertia;
     this.twistAngle += this.twistVelocity * dt;
     if (torque !== 0) {

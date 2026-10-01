@@ -74,7 +74,9 @@ export class GrabSystem {
         label: `grip:${bar.id}:${hand.side}`,
         pointA: { x: target.x - bar.x, y: target.y - bar.y },
         pointB: rotate(hand.local, hand.body.angle),
-        damping: 0.015,
+        // The constraint supplies support, not a tangential brake. Release only
+        // removes these two constraints; the solver's velocities remain intact.
+        damping: 0,
       });
     };
     this.grips = [createGrip(this.gymnast.hands[0]), createGrip(this.gymnast.hands[1])];
@@ -88,6 +90,15 @@ export class GrabSystem {
     this.grips = null;
     this.heldBar = null;
     this.releasedAt = this.time;
+    // Invalidate positional warm-start corrections from the now-removed support.
+    // These are solver caches, NOT velocity or momentum. Replaying them on the
+    // next airborne step would apply a stale bar impulse to the ragdoll.
+    for (const body of this.gymnast.bodies) {
+      const cache = body.constraintImpulse as unknown as Point & { angle: number };
+      cache.x = 0;
+      cache.y = 0;
+      cache.angle = 0;
+    }
   }
 
   render(): void {

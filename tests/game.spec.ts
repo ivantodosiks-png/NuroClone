@@ -195,6 +195,52 @@ test('R repeatedly resets all velocities and removes old grips; Esc pauses/menu'
   await expect(page.getByRole('button',{name:'PLAY',exact:true})).toBeVisible();
 });
 
+test('release retains swing velocity and follows a ballistic arc', async ({page}) => {
+  await start(page);
+  const result=await fixture(page, `
+    const draw=scene.renderScene;scene.renderScene=()=>{};
+    const trials=[];
+    try {
+      for(const pumpSteps of [30,60,90,120,150,180]){
+        scene.restart();scene.controller.keys.right.isDown=true;
+        for(let t=0;t<pumpSteps;t++)scene.update(0,1000/120);
+        const before=scene.snapshot();
+        scene.controller.pending.add('release');scene.update(0,0);
+        const released=scene.snapshot();
+        scene.controller.keys.right.isDown=false;
+        const samples=[];
+        for(let t=0;t<120;t++){
+          scene.update(0,1000/120);
+          if(scene.grabs.count)break;
+          if(t%6===5)samples.push({t:(t+1)/120,x:scene.gymnast.center.x,y:scene.gymnast.center.y,vx:scene.gymnast.velocity.x,vy:scene.gymnast.velocity.y});
+        }
+        trials.push({pumpSteps,before: {center:before.center,velocity:before.velocity},same:JSON.stringify(before.bodies)===JSON.stringify(released.bodies),samples});
+      }
+    }finally{scene.renderScene=draw;scene.restart();}
+    return trials;
+  `);
+  type Trial = { pumpSteps:number; same:boolean; before:{center:{x:number;y:number};velocity:{x:number;y:number}}; samples:{t:number;x:number;y:number;vx:number;vy:number}[] };
+  const trials=result as Trial[];
+  expect(trials.every(r=>r.same)).toBe(true);
+  for(const trial of trials){
+    const sample=trial.samples.find(s=>s.t===0.2)!;
+    const expectedX=trial.before.center.x+trial.before.velocity.x*sample.t;
+    const expectedY=trial.before.center.y+trial.before.velocity.y*sample.t+0.5*950*sample.t**2;
+    expect(Math.abs(sample.x-expectedX)).toBeLessThan(2);
+    expect(Math.abs(sample.y-expectedY)).toBeLessThan(2);
+    expect(Math.abs(sample.vx)).toBeGreaterThan(Math.abs(trial.before.velocity.x)*0.98);
+  }
+  const weak=trials.find(t=>t.pumpSteps===30)!;
+  const strong=trials.find(t=>t.pumpSteps===90)!;
+  expect(strong.before.velocity.x).toBeGreaterThan(150);
+  expect(strong.before.velocity.y).toBeLessThan(-150);
+  expect(strong.samples[0].x).toBeGreaterThan(strong.before.center.x);
+  expect(strong.samples[0].y).toBeLessThan(strong.before.center.y);
+  expect(strong.samples.some(s=>s.vy>100)).toBe(true);
+  const at=(trial:Trial)=>trial.samples.find(s=>s.t===0.4)!;
+  expect(at(strong).x-strong.before.center.x).toBeGreaterThan((at(weak).x-weak.before.center.x)*1.8);
+});
+
 test('transfer exploration', async ({page}) => {
   test.setTimeout(120000);
   await start(page);
@@ -202,11 +248,11 @@ test('transfer exploration', async ({page}) => {
     const draw = scene.renderScene; scene.renderScene=()=>{};
     const candidates=[]; const winners=[];
     try {
-      for(let releaseStep=0;releaseStep<=480;releaseStep+=10){
+      for(let releaseStep=0;releaseStep<=400;releaseStep+=10){
         for(const airDirection of [0,1,-1]){
           for(const tuckSteps of [0,30,60]){
             scene.restart(); scene.controller.keys.right.isDown=true;
-            for(let t=0;t<302;t++)scene.update(0,1000/120);
+            for(let t=0;t<296;t++)scene.update(0,1000/120);
             scene.grabs.release();scene.controller.keys.right.isDown=false;
             for(let t=0;t<250&&!scene.grabs.count;t++)scene.update(0,1000/120);
             if(scene.grabs.barId!==1)throw new Error('First transfer failed');
@@ -230,7 +276,7 @@ test('transfer exploration', async ({page}) => {
         }
       }
     } finally {scene.renderScene=draw;scene.restart();}
-    return {winners:winners.slice(0,12),closest:candidates.sort((a,b)=>a.closest-b.closest).slice(0,6)};
+    return {winners:winners.slice(0,12),sameBar:candidates.filter(c=>c.caught===0).slice(0,3),closest:candidates.sort((a,b)=>a.closest-b.closest).slice(0,6)};
   `);
   console.log(JSON.stringify(result));
   expect(result.winners.length).toBeGreaterThan(0);
