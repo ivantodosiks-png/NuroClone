@@ -106,13 +106,23 @@ export class GameScene extends Phaser.Scene {
     if (this.playing && !this.paused) {
       this.accumulator += Math.min(delta, PHYSICS.maxFrameMs);
       while (this.accumulator >= PHYSICS.stepMs) {
-        this.grabs.step(PHYSICS.stepMs);
-        const grounded = this.level.bars.some(bar => this.gymnast.bodies.some(b =>
-          b.bounds.max.x > bar.x - 100 && b.bounds.min.x < bar.x + 100
-          && b.bounds.max.y >= bar.y + TRAINING.platformDrop - 2
-          && b.bounds.min.y <= bar.y + TRAINING.platformDrop + 3));
-        this.gymnast.step(this.controller.direction, this.controller.pose, this.grabs.anchor, this.controller.twist, grounded);
-        this.matter.world.step(PHYSICS.stepMs);
+        // Matter has discrete collisions. Subdivide fast translation AND rotation
+        // so even a thin forearm cannot cross an entire bar between two checks.
+        const travel = Math.max(...this.gymnast.bodies.map(b => {
+          const radius = Math.hypot(b.bounds.max.x - b.bounds.min.x, b.bounds.max.y - b.bounds.min.y) / 2;
+          return (Math.hypot(b.velocity.x, b.velocity.y) + Math.abs(b.angularVelocity) * radius) * PHYSICS.stepMs / (1000 / 60);
+        }));
+        const substeps = Math.max(1, Math.ceil(travel / PHYSICS.maxCollisionTravel));
+        const step = PHYSICS.stepMs / substeps;
+        for (let i = 0; i < substeps; i++) {
+          this.grabs.step(step);
+          const grounded = this.level.bars.some(bar => this.gymnast.bodies.some(b =>
+            b.bounds.max.x > bar.x - 100 && b.bounds.min.x < bar.x + 100
+            && b.bounds.max.y >= bar.y + TRAINING.platformDrop - 2
+            && b.bounds.min.y <= bar.y + TRAINING.platformDrop + 3));
+          this.gymnast.step(this.controller.direction, this.controller.pose, this.grabs.anchor, this.controller.twist, grounded, step);
+          this.matter.world.step(step);
+        }
         this.accumulator -= PHYSICS.stepMs;
         this.elapsed += PHYSICS.stepMs;
       }
@@ -141,7 +151,7 @@ export class GameScene extends Phaser.Scene {
       playing: this.playing, paused: this.paused, elapsed: this.elapsed,
       state: this.grabs?.state, grabs: this.grabs?.count, barId: this.grabs?.barId,
       canGrab: this.grabs?.canGrab, coolingDown: this.grabs?.coolingDown,
-      bars: this.level?.bars.map(b => ({id: b.id, x: b.x, y: b.y})),
+      bars: this.level?.bars.map(b => ({id: b.id, x: b.x, y: b.y, isSensor: b.body.isSensor})),
       pose: this.gymnast?.pose, center: this.gymnast?.center,
       speed: this.gymnast?.speed, velocity: this.gymnast?.velocity,
       twistAngle: this.gymnast?.twistAngle, twistVelocity: this.gymnast?.twistVelocity,

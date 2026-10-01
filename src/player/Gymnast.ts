@@ -30,7 +30,9 @@ export class Gymnast {
   twistVelocity = 0; // radians/second
 
   constructor(private readonly scene: Phaser.Scene) {
-    const { x, y } = TRAINING.bar;
+    const { x } = TRAINING.bar;
+    // Begin below the solid bar, without any collider overlap at zero velocity.
+    const y = TRAINING.bar.y + TRAINING.barHeight / 2 + 5;
     this.graphics = scene.add.graphics().setDepth(5);
     this.torso = this.bone('torso', { x, y: y + 88 }, { x, y: y + 132 }, 17, 4.2);
     this.pelvis = this.bone('pelvis', { x, y: y + 132 }, { x, y: y + 153 }, 24, 2.5);
@@ -102,10 +104,10 @@ export class Gymnast {
     this.limbMotors.set(name, motor);
   }
 
-  step(direction: number, pose: Pose, gripAnchor: Point | null, twisting = false, grounded = false): void {
+  step(direction: number, pose: Pose, gripAnchor: Point | null, twisting = false, grounded = false, deltaMs = PHYSICS.stepMs): void {
     const grabbed = gripAnchor !== null;
     this.pose = pose;
-    const dt = PHYSICS.stepMs / 1000;
+    const dt = deltaMs / 1000;
     const blend = 1 - Math.exp(-PHYSICS.poseTransitionSpeed * dt);
     this.tuckAmount += ((pose === 'tuck' ? 1 : 0) - this.tuckAmount) * blend;
     this.raiseAmount += ((pose === 'raise' ? 1 : 0) - this.raiseAmount) * blend;
@@ -155,7 +157,7 @@ export class Gymnast {
   }
 
   /**
-   * 2.5D analogue: a torque-integrated axial degree of freedom on the 2D ragdoll.
+   * Planar twist analogue: an inertial degree of freedom on the 2D ragdoll.
    * L = I*w persists without K. Mass/pose determine inertia, grips and ground exert
    * resistance. A small equal/opposite torque couple loads the real spine joints.
    * This is not a timer animation or a second planar somersault counter.

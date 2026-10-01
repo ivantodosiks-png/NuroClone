@@ -1,5 +1,5 @@
 export const COLORS = {
-  background: 0xc9e5ef,
+  background: 0xf3f5ef,
   ink: 0x193c4b,
   muted: 0x84958c,
   grid: 0xdde3d9,
@@ -27,9 +27,10 @@ export const PHYSICS = {
   autoGrabDistance: 38,
   autoGrabMaxVelocity: 16, // m/s at each hand, including angular velocity
   autoGrabCooldown: 280, // simulation ms
+  maxCollisionTravel: 3, // maximum endpoint travel per collision substep (px)
 };
 
-// Physics coordinates all belong to the same x/y plane. Depth is rendering only.
+// Side-view bars: the drawn capsule and the solid collider have identical bounds.
 export const BARS = [
   { x: 860, y: 242, halfWidth: 14 },
   { x: 1130, y: 280, halfWidth: 14 },
@@ -40,6 +41,7 @@ export const BARS = [
 
 export const TRAINING = {
   bar: BARS[0],
+  barHeight: 18,
   platformDrop: 440,
   fallLimit: 1550,
   left: -1000,

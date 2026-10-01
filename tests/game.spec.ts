@@ -38,6 +38,7 @@ test('minimal menu, controls, no HUD, side-view scene and two-hand start', async
   expect(s.grabs).toBe(2);
   expect(s.barId).toBe(0);
   expect(s.bars.length).toBe(5);
+  expect(s.bars.every(bar => !bar.isSensor)).toBe(true);
   expect(Math.abs(s.hands[0].x-s.hands[1].x)).toBeLessThan(9);
   expect(Math.abs(s.feet[0].x-s.feet[1].x)).toBeLessThan(12);
   expect(Math.abs(s.jointAngles.rightHip)).toBeLessThan(0.2);
@@ -208,28 +209,37 @@ test('release retains swing velocity and follows a ballistic arc', async ({page}
         scene.controller.pending.add('release');scene.update(0,0);
         const released=scene.snapshot();
         scene.controller.keys.right.isDown=false;
+        let hits=0;
+        const onHit=e=>{hits+=e.pairs.filter(p=>p.bodyA.label.startsWith('bar:')||p.bodyB.label.startsWith('bar:')).length;};
+        scene.matter.world.on('collisionstart',onHit);
         const samples=[];
         for(let t=0;t<120;t++){
           scene.update(0,1000/120);
           if(scene.grabs.count)break;
-          if(t%6===5)samples.push({t:(t+1)/120,x:scene.gymnast.center.x,y:scene.gymnast.center.y,vx:scene.gymnast.velocity.x,vy:scene.gymnast.velocity.y});
+          if(t%6===5)samples.push({hits,t:(t+1)/120,x:scene.gymnast.center.x,y:scene.gymnast.center.y,vx:scene.gymnast.velocity.x,vy:scene.gymnast.velocity.y});
         }
-        trials.push({pumpSteps,before: {center:before.center,velocity:before.velocity},same:JSON.stringify(before.bodies)===JSON.stringify(released.bodies),samples});
+        scene.matter.world.off('collisionstart',onHit);
+        trials.push({pumpSteps,hits,before: {center:before.center,velocity:before.velocity},same:JSON.stringify(before.bodies)===JSON.stringify(released.bodies),samples});
       }
     }finally{scene.renderScene=draw;scene.restart();}
     return trials;
   `);
-  type Trial = { pumpSteps:number; same:boolean; before:{center:{x:number;y:number};velocity:{x:number;y:number}}; samples:{t:number;x:number;y:number;vx:number;vy:number}[] };
+  type Trial = { pumpSteps:number; same:boolean; before:{center:{x:number;y:number};velocity:{x:number;y:number}}; samples:{hits:number;t:number;x:number;y:number;vx:number;vy:number}[] };
   const trials=result as Trial[];
   expect(trials.every(r=>r.same)).toBe(true);
+  let freeFlights=0;
   for(const trial of trials){
     const sample=trial.samples.find(s=>s.t===0.2)!;
+    // A real bar impact changes momentum: compare the parabola only in free flight.
+    if(sample.hits)continue;
+    freeFlights++;
     const expectedX=trial.before.center.x+trial.before.velocity.x*sample.t;
     const expectedY=trial.before.center.y+trial.before.velocity.y*sample.t+0.5*950*sample.t**2;
     expect(Math.abs(sample.x-expectedX)).toBeLessThan(2);
     expect(Math.abs(sample.y-expectedY)).toBeLessThan(2);
     expect(Math.abs(sample.vx)).toBeGreaterThan(Math.abs(trial.before.velocity.x)*0.98);
   }
+  expect(freeFlights).toBeGreaterThanOrEqual(4);
   const weak=trials.find(t=>t.pumpSteps===30)!;
   const strong=trials.find(t=>t.pumpSteps===90)!;
   expect(strong.before.velocity.x).toBeGreaterThan(150);
@@ -241,43 +251,75 @@ test('release retains swing velocity and follows a ballistic arc', async ({page}
   expect(at(strong).x-strong.before.center.x).toBeGreaterThan((at(weak).x-weak.before.center.x)*1.8);
 });
 
-test('transfer exploration', async ({page}) => {
-  test.setTimeout(120000);
+test('solid bars stop head, torso, hands and legs, including fast impacts', async ({page}) => {
   await start(page);
-  const result = await fixture(page, `
-    const draw = scene.renderScene; scene.renderScene=()=>{};
-    const candidates=[]; const winners=[];
+  const impacts = await fixture(page, `
+    const results=[];
     try {
-      for(let releaseStep=0;releaseStep<=400;releaseStep+=10){
-        for(const airDirection of [0,1,-1]){
-          for(const tuckSteps of [0,30,60]){
-            scene.restart(); scene.controller.keys.right.isDown=true;
-            for(let t=0;t<296;t++)scene.update(0,1000/120);
-            scene.grabs.release();scene.controller.keys.right.isDown=false;
-            for(let t=0;t<250&&!scene.grabs.count;t++)scene.update(0,1000/120);
-            if(scene.grabs.barId!==1)throw new Error('First transfer failed');
-            scene.controller.keys.right.isDown=true;
-            for(let t=0;t<releaseStep;t++){
-              scene.update(0,1000/120);
-            }
-            scene.grabs.release(); scene.controller.keys.right.isDown=airDirection===1;scene.controller.keys.left.isDown=airDirection===-1;
-            let closest=10000, caught=null, speeds=[];
-            for(let t=0;t<250;t++){
-              scene.controller.keys.tuck.isDown=t<tuckSteps;
-              scene.update(0,1000/120);
-              const bar=scene.level.bars[2];
-              const distance=Math.max(...scene.gymnast.hands.map(h=>{const p=scene.gymnast.handPoint(h);return Math.hypot(p.x-bar.x,p.y-bar.y);}));
-              if(distance<closest){closest=distance;speeds=scene.gymnast.hands.map(h=>scene.grabs.handSpeed(h));}
-              if(scene.grabs.count){caught=scene.grabs.barId;break;}
-            }
-            const record={releaseStep,airDirection,tuckSteps,closest,caught,speeds};
-            candidates.push(record);if(caught===2)winners.push(record);
-          }
+      for(const part of ['head','torso','leftLowerArm','rightLowerArm','leftShin','rightShin']){
+        for(const axis of ['x','y'])for(const speed of [12,40]){
+          scene.restart();scene.grabs.release();scene.grabs.releasedAt=Infinity;
+          const body=scene.gymnast.bodies.find(b=>b.label==='nuro:'+part);
+          // Isolate each actual Nuro collider to identify its contact unambiguously.
+          for(const joint of scene.gymnast.joints)scene.matter.world.removeConstraint(joint);
+          for(const b of scene.gymnast.bodies)if(b!==body)scene.matter.world.remove(b);
+          scene.gymnast.step=()=>{};
+          const bar=scene.level.bars[0];
+          Matter.Body.setAngle(body,0);
+          Matter.Body.setAngularVelocity(body,0);
+          Matter.Body.setPosition(body,{x:bar.x-(axis==='x'?90:0),y:bar.y-(axis==='y'?90:0)});
+          Matter.Body.setVelocity(body,{x:axis==='x'?speed:0,y:axis==='y'?speed:0});
+          let hit=false;
+          const onHit=e=>{hit ||= e.pairs.some(p=>(p.bodyA===body&&p.bodyB===bar.body)||(p.bodyB===body&&p.bodyA===bar.body));};
+          scene.matter.world.on('collisionstart',onHit);
+          for(let t=0;t<30&&!hit;t++)scene.update(0,1000/120);
+          scene.matter.world.off('collisionstart',onHit);
+          results.push({part,axis,speed,hit,position:body.position[axis],edge:bar.body.bounds.max[axis],velocity:body.velocity[axis]});
         }
       }
-    } finally {scene.renderScene=draw;scene.restart();}
-    return {winners:winners.slice(0,12),sameBar:candidates.filter(c=>c.caught===0).slice(0,3),closest:candidates.sort((a,b)=>a.closest-b.closest).slice(0,6)};
+    }finally{scene.restart();}
+    return results;
   `);
-  console.log(JSON.stringify(result));
-  expect(result.winners.length).toBeGreaterThan(0);
+  expect(impacts).toHaveLength(24);
+  for(const impact of impacts){
+    expect(impact.hit,JSON.stringify(impact)).toBe(true);
+    expect(impact.position).toBeLessThan(impact.edge);
+    expect(impact.velocity).toBeLessThan(impact.speed*0.5);
+  }
+});
+
+
+test('swing, release, same-bar regrab and a chain of two transfers use only controls', async ({page}) => {
+  await start(page);
+  const result=await fixture(page, `
+    const draw=scene.renderScene;scene.renderScene=()=>{};
+    const fly=(pumpSteps,airDirection,tuckSteps)=>{
+      scene.controller.keys.left.isDown=false;
+      scene.controller.keys.right.isDown=true;
+      scene.controller.keys.tuck.isDown=false;
+      for(let t=0;t<pumpSteps;t++)scene.update(0,1000/120);
+      scene.controller.pending.add('release');scene.update(0,0);
+      const released=scene.grabs.state;
+      scene.controller.keys.right.isDown=airDirection===1;
+      scene.controller.keys.left.isDown=airDirection===-1;
+      let alwaysPaired=true;
+      for(let t=0;t<250&&!scene.grabs.count;t++){
+        scene.controller.keys.tuck.isDown=t<tuckSteps;
+        scene.update(0,1000/120);
+        alwaysPaired &&= scene.grabs.count===0||scene.grabs.count===2;
+      }
+      return {released,bar:scene.grabs.barId,count:scene.grabs.count,alwaysPaired};
+    };
+    try {
+      scene.restart();
+      const same=fly(40,-1,0);
+      scene.restart();
+      const first=fly(328,0,30);
+      const second=fly(160,1,60);
+      return {same,first,second};
+    }finally{scene.renderScene=draw;scene.restart();}
+  `);
+  for(const [name,bar] of [['same',0],['first',1],['second',2]] as const){
+    expect(result[name]).toEqual({released:'RELEASED',bar,count:2,alwaysPaired:true});
+  }
 });
