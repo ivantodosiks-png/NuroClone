@@ -5,7 +5,7 @@ import { MenuScene } from './scenes/MenuScene';
 import '@fontsource-variable/golos-text';
 import './ui/styles.css';
 
-const game = new Phaser.Game({
+export const game = new Phaser.Game({
   // This vector-only scene is inexpensive in Canvas and needs no GPU/WebGL.
   type: Phaser.CANVAS,
   parent: 'game',
@@ -17,9 +17,9 @@ const game = new Phaser.Game({
     matter: {
       gravity: { x: 0, y: PHYSICS.gravity },
       enableSleeping: false,
-      positionIterations: 10,
+      positionIterations: 12,
       velocityIterations: 8,
-      constraintIterations: 8,
+      constraintIterations: 12,
     },
   },
   scene: [MenuScene, GameScene],

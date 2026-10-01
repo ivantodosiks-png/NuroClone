@@ -1,124 +1,28 @@
-:root { font-family: 'Golos Text Variable', 'Segoe UI', Arial, sans-serif; color: #173e35; background: #f5f5ef; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; --ink: #173e35; --muted: #7e8c7e; --lime: #d4ef8c; --line: #d9dfd3; }
+:root { font-family: 'Golos Text Variable', 'Segoe UI', sans-serif; color: #173e35; background: #f5f5ef; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; overflow: hidden; }
-button, a { -webkit-tap-highlight-color: transparent; }
-button { font: inherit; color: inherit; cursor: pointer; }
-button:focus-visible, a:focus-visible { outline: 3px solid #90b759; outline-offset: 5px; }
-button svg { width: 20px; height: 20px; flex-shrink: 0; }
+button { font: inherit; cursor: pointer; color: inherit; }
+button:focus-visible { outline: 3px solid #91ae65; outline-offset: 4px; }
 [hidden] { display: none !important; }
-#app, #game, #ui { width: 100%; height: 100%; position: fixed; inset: 0; }
+#app, #game, #ui { position: fixed; inset: 0; width: 100%; height: 100%; }
 #game canvas { display: block; }
 #ui { pointer-events: none; }
-button, a { pointer-events: auto; }
-.hud, .menu { position: absolute; inset: 0; }
-.topbar { height: 94px; margin: 0 42px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); gap: 24px; }
-.brand { color: var(--ink); text-decoration: none; font-size: 28px; font-weight: 850; letter-spacing: -1.5px; display: inline-flex; align-items: center; gap: 12px; }
-.brand-light { font-weight: 450; }
-.brand sup { font-size: 10px; margin-left: 4px; vertical-align: top; line-height: 22px; }
-.brand-mark { width: 28px; height: 29px; position: relative; display: inline-block; transform: rotate(-10deg); }
-.brand-mark i { position: absolute; display: block; background: var(--ink); width: 6px; height: 25px; border-radius: 6px; bottom: 0; }
-.brand-mark i:nth-child(2) { transform: rotate(-29deg); left: 10px; height: 30px; bottom: -1px; }
-.brand-mark i:nth-child(3) { left: 21px; }
-.session-label, .menu-build, .live-label { font-size: 9px; font-weight: 600; letter-spacing: 1.6px; display: flex; align-items: center; gap: 11px; }
-.session-label { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; color: #6f7c6e; }
-.session-label b { color: var(--ink); }
-.status-dot { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: #86a956; flex-shrink: 0; }
-.separator { color: #bdc7b8; padding: 0 3px; }
-.menu-build { color: #83917f; }
-.top-actions { display: flex; align-items: center; gap: 8px; }
-.live-label { margin-right: 18px; color: #72806f; }
-.icon-button { width: 36px; height: 36px; border: 1px solid var(--line); background: transparent; border-radius: 50%; display: grid; place-items: center; transition: background .2s; }
-.icon-button svg { width: 16px; height: 16px; }
-.icon-button:hover { background: #e6ecd9; }
-.eyebrow { display: flex; align-items: center; gap: 9px; font-size: 9px; font-weight: 600; letter-spacing: 1.5px; color: #7a8774; }
-.tiny-line { width: 24px; height: 1px; display: inline-block; background: #7f965f; }
-.menu-content { position: absolute; top: 24%; left: 8.3%; }
-.menu-content h1 { font-size: clamp(44px, 5.25vw, 78px); line-height: 1.03; font-weight: 650; letter-spacing: -4px; margin: 27px 0 22px; }
-.menu-content h1 em { font-style: normal; color: #849e64; }
-.menu-content p { font-size: 13px; color: #7b8876; line-height: 1.85; margin-bottom: 30px; }
-.primary-button { border: 0; border-radius: 7px; background: var(--ink); color: #f6f8ec; min-height: 54px; padding: 0 23px; display: flex; align-items: center; justify-content: space-between; gap: 45px; font-size: 12px; font-weight: 500; box-shadow: 0 5px 12px #173e350b; transition: background .2s, transform .2s; }
-.primary-button:hover { background: #2e5541; transform: translateY(-2px); }
-.primary-button svg { color: var(--lime); }
-.menu-start-hint { display: flex; gap: 9px; align-items: center; margin-top: 12px; font-size: 9px; color: #909a89; }
-.menu-start-hint kbd { font-size: 8px; padding: 3px 5px; min-width: auto; min-height: 18px; }
-.menu-tags { display: flex; gap: 18px; font-size: 9px; color: #7a8873; margin-top: 37px; }
-.menu-tags span { display: flex; align-items: center; gap: 6px; }
-.menu-tags i { width: 4px; height: 4px; border: 1px solid #91a378; border-radius: 50%; }
-.nuro-tag { position: absolute; top: 47%; left: 66.5%; display: flex; align-items: flex-start; gap: 13px; font-size: 11px; font-weight: 600; letter-spacing: 1.8px; }
-.nuro-tag .tag-line { width: 30px; height: 1px; background: #a6b494; margin-top: 5px; }
-.nuro-tag div span { display: block; font-size: 7px; color: #919b83; letter-spacing: 1px; margin-top: 7px; font-weight: 400; }
-.menu-bottom { position: absolute; left: 8.3%; right: 8.3%; bottom: 8.8%; border-top: 1px solid var(--line); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; }
-.menu-bottom .eyebrow { font-size: 8px; }
-.menu-bottom h3 { font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 15px; margin: 13px 0 0; }
-.menu-bottom h3 span { font-size: 11px; color: #879675; }
-.menu-bottom h3 svg { width: 15px; height: 15px; margin-left: 10px; color: #889c72; }
-.menu-device { font-size: 8px; letter-spacing: 1px; color: #819075; text-align: right; }
-.menu-device small { display: block; margin-top: 8px; font-size: 9px; letter-spacing: 1px; color: #9aa48e; }
-.keyboard-symbol { font-size: 20px; vertical-align: middle; margin-left: 8px; }
-.menu-footer, .footer-note { display: flex; justify-content: space-between; color: #95a089; font-size: 7px; letter-spacing: 1.2px; }
-.menu-footer { position: absolute; bottom: 24px; left: 42px; right: 42px; }
-.menu-footer b, .footer-note b { margin: 0 6px; color: #718c5f; }
-.lesson-panel { position: absolute; top: 18%; left: 42px; width: 275px; }
-.lesson-panel h1 { font-size: 29px; letter-spacing: -1.2px; font-weight: 550; line-height: 1.2; margin: 19px 0 12px; }
-.lesson-panel h1 span, .pause-card h2 span { color: #9ab771; }
-.lesson-panel p { color: #83907b; font-size: 11px; line-height: 1.8; }
-.lesson-steps { margin-top: 30px; width: 230px; }
-.lesson-step { display: flex; align-items: center; font-size: 10px; min-height: 44px; border-bottom: 1px solid #e0e5d9; color: #95a18a; gap: 14px; }
-.step-number { font-size: 9px; color: #aab5a0; }
-.lesson-step > span:nth-child(2) { flex: 1; }
-.lesson-step small { float: right; font-size: 8px; letter-spacing: .5px; color: #a0aa96; line-height: 14px; }
-.lesson-step i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #c3cdb6; }
-.lesson-step.current { color: #3c5744; }
-.lesson-step.current i { border: 3px solid #b1c797; background: #f5f5ef; }
-.lesson-step.done i { background: #92b061; border-color: #92b061; }
-.lesson-step.done { color: #587a47; }
-.practice-complete { color: #789654; font-size: 9px; line-height: 1.6; margin-top: 16px; width: 220px; }
-.practice-complete svg { width: 12px; height: 12px; vertical-align: middle; }
-.telemetry { position: absolute; top: 135px; right: 42px; width: 200px; padding: 16px; border: 1px solid #dfe5d7; border-radius: 8px; background: #f5f5efd9; backdrop-filter: blur(5px); }
-.telemetry-title { font-size: 8px; letter-spacing: 1px; display: flex; align-items: center; gap: 7px; color: #7e8d72; }
-.telemetry-title .status-dot { width: 4px; height: 4px; }
-.telemetry-title > span:last-child { font-size: 7px; color: #a0ac93; margin-left: auto; }
-.telemetry dl { margin: 18px 0 14px; }
-.telemetry dl div { display: flex; align-items: center; justify-content: space-between; margin-top: 11px; }
-.telemetry dt { font-size: 9px; color: #87947c; }
-.telemetry dd { margin: 0; font-family: 'Consolas', monospace; font-size: 11px; font-variant-numeric: tabular-nums; }
-.telemetry dd small { font-size: 8px; color: #9caa90; }
-.grip-dots { border-top: 1px solid #e0e6d9; padding-top: 12px; display: flex; align-items: center; gap: 4px; }
-.grip-dots i { width: 6px; height: 6px; border-radius: 50%; border: 1px solid #a6b68f; }
-.grip-dots i.on { background: #90ac64; border-color: #90ac64; }
-.grip-dots span { font-size: 5.8px; letter-spacing: .4px; margin-left: 3px; color: #81966c; }
-.bottom-ui { position: absolute; bottom: 24px; left: 42px; right: 42px; }
-.session-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 19px; }
-.session-location { display: flex; align-items: center; gap: 8px; font-size: 8px; letter-spacing: 1.2px; color: #819275; }
-.session-location > span:not(.status-dot) { margin: 0 6px; color: #b4c0a7; }
-.session-clock { font-family: Consolas, monospace; font-size: 12px; letter-spacing: 2px; color: #91a080; }
-.state-pill { display: flex; gap: 10px; align-items: center; padding: 7px 12px; border: 1px solid #d5dfc7; border-radius: 20px; background: #eef2e6; color: #6b8355; font-size: 7px; letter-spacing: .65px; }
-.pill-divider { width: 1px; height: 8px; background: #bfccae; }
-.controls { display: flex; align-items: center; justify-content: space-evenly; border: 1px solid #d6dfcb; border-radius: 10px; height: 78px; background: #f5f6f0ee; box-shadow: 0 4px 16px #3b542505; }
-.control { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 9px 12px; border-right: 1px solid #e0e5d8; flex: 1; }
-.control:last-child { border-right: 0; }
-.control > div { display: flex; gap: 4px; }
-.control > span { font-size: 10px; white-space: nowrap; color: #748168; }
-kbd { display: inline-flex; justify-content: center; align-items: center; padding: 7px; min-width: 30px; min-height: 31px; border: 1px solid #d9e0d0; box-shadow: 0 2px 0 #dfe5d7; border-radius: 5px; font: 500 10px 'Golos Text', Arial, sans-serif; color: #617653; background: #f8f9f2; transition: background .12s, color .12s; }
-.control-space { flex: 1.45; }
-.control-space kbd { min-width: 55px; font-size: 8px; }
-.control-button { background: none; border-top: 0; border-left: 0; border-bottom: 0; height: 48px; }
-.control-button:hover kbd, .control.pressed kbd { background: #d4e5b6; color: #345327; border-color: #b6ce93; box-shadow: 0 1px 0 #b6ce93; }
-.control.available kbd { background: #d4ef8c; border-color: #aeca77; }
-.footer-note { margin-top: 21px; }
-.pause-overlay { position: absolute; inset: 0; background: #e7edde99; backdrop-filter: blur(10px); display: grid; place-items: center; pointer-events: auto; }
-.pause-card { width: 390px; background: #f7f8f1; padding: 38px; border: 1px solid #d4ddca; border-radius: 16px; box-shadow: 0 25px 90px #29482a14; }
-.pause-card h2 { font-size: 31px; font-weight: 550; letter-spacing: -1.2px; margin: 22px 0 10px; }
-.pause-card p { color: #8a967e; font-size: 12px; margin-bottom: 30px; }
-.pause-card .primary-button { width: 100%; }
-.secondary-button { background: transparent; border: 1px solid #d8e1ce; min-height: 48px; display: flex; align-items: center; gap: 10px; border-radius: 7px; width: 100%; margin-top: 12px; padding: 0 13px; font-size: 11px; }
-.secondary-button:hover { background: #eaf0df; }
-.secondary-button kbd { margin-left: auto; font-size: 8px; min-height: 22px; min-width: 22px; padding: 4px; }
-.secondary-button svg { width: 15px; height: 15px; }
-.text-button { display: block; margin: 22px auto; border: 0; border-bottom: 1px solid #b3c1a5; padding: 0 0 4px; background: transparent; font-size: 10px; color: #7a8a6a; }
-.pause-hint { display: block; text-align: center; font-size: 8px; letter-spacing: .6px; color: #9ca78e; }
-@media (min-width: 1600px) { .menu-content { left: 12%; } .lesson-panel { left: 4%; } .telemetry { right: 4%; } }
-@media (max-height: 760px) { .topbar { height: 76px; } .menu-content { top: 21%; } .menu-content h1 { font-size: 57px; margin: 20px 0 15px; } .menu-content p { margin-bottom: 22px; font-size: 12px; } .menu-tags { margin-top: 20px; } .menu-bottom { bottom: 8%; padding-top: 18px; } .lesson-panel { top: 17%; } .lesson-steps { margin-top: 18px; } .telemetry { top: 108px; } .controls { height: 66px; } .bottom-ui { bottom: 20px; } .footer-note { margin-top: 16px; } }
-@media (max-width: 1100px) { .topbar { margin: 0 26px; } .session-label { font-size: 7px; letter-spacing: 1px; } .menu-content { left: 6%; } .menu-content h1 { font-size: 53px; } .menu-content .eyebrow { font-size: 7px; } .lesson-panel { left: 26px; width: 215px; } .lesson-panel h1 { font-size: 25px; } .lesson-steps { width: 200px; } .telemetry { right: 26px; width: 178px; padding: 13px; } .bottom-ui { left: 26px; right: 26px; } .control { flex-direction: column; gap: 8px; padding: 0 8px; } .controls { height: 85px; } .control > span { font-size: 8px; } .control-button { height: auto; } .live-label { display: none; } }
-@media (max-width: 760px) { .session-label, .menu-build, .nuro-tag { display: none; } .brand { font-size: 24px; } .menu-content { top: 19%; left: 7%; } .menu-content h1 { font-size: 44px; letter-spacing: -2.5px; } .menu-content p { font-size: 10px; } .menu-content { padding: 18px; background: #f5f5efe8; border-radius: 10px; } .menu-tags { display: none; } .menu-bottom { left: 7%; right: 7%; } .menu-device { display: none; } .menu-footer, .footer-note { font-size: 5px; letter-spacing: .5px; } .lesson-panel { top: 105px; } .lesson-panel h1 { font-size: 21px; } .lesson-panel p, .lesson-steps, .practice-complete { display: none; } .lesson-panel .eyebrow { font-size: 6px; } .telemetry { top: 99px; width: 151px; } .telemetry dt { font-size: 8px; } .grip-dots span { font-size: 4.5px; } .session-location { font-size: 6px; } .state-pill { font-size: 5px; padding: 6px; gap: 5px; } .session-clock { font-size: 9px; } .control { gap: 8px; padding: 0 3px; } .control > span { font-size: 6px; } kbd { min-width: 23px; min-height: 26px; padding: 4px; font-size: 9px; } .control-space kbd { min-width: 42px; } }
-@media (prefers-reduced-motion: reduce) { button, kbd { transition: none !important; } }
+.menu, .pause-overlay { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: auto; background: #f5f5ef; }
+.menu-card { width: min(360px, calc(100vw - 40px)); }
+.menu-card h1, .menu-card h2 { text-align: center; font-size: 36px; font-weight: 650; letter-spacing: 2px; margin: 0 0 32px; }
+.menu-card button { width: 100%; min-height: 50px; display: block; margin-top: 12px; border: 1px solid #b8c7aa; border-radius: 5px; background: #edf1e6; font-size: 14px; letter-spacing: 1px; pointer-events: auto; }
+.menu-card button:hover { background: #dce7cb; }
+.menu-card [data-action="play"], .menu-card [data-action="resume"] { color: #f5f5ef; background: #173e35; border-color: #173e35; }
+.menu-card [data-action="play"]:hover, .menu-card [data-action="resume"]:hover { background: #2b5445; }
+.controls-list { margin: 0 0 28px; }
+.controls-list > div { display: flex; gap: 16px; padding: 10px 0; border-bottom: 1px solid #dde3d5; font-size: 13px; }
+.controls-list dt { width: 64px; flex-shrink: 0; font-weight: 600; }
+.controls-list dd { margin: 0; color: #65795a; }
+.hud { position: absolute; inset: 0; }
+.scoreboard { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); width: min(850px, calc(100vw - 40px)); margin: 0; display: flex; justify-content: space-between; gap: 24px; padding: 16px 24px; border: 1px solid #d6dfcb; border-radius: 7px; background: #f5f5efee; }
+.scoreboard dt { font-size: 11px; color: #7c8e70; margin-bottom: 7px; }
+.scoreboard dd { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
+.scoreboard .last-trick { flex: 1; min-width: 150px; }
+.scoreboard .last-trick dd { font-size: 14px; line-height: 1.5; }
+.pause-overlay { background: #f5f5efee; }
+@media (max-width: 680px) { .scoreboard { gap: 12px; padding: 12px; top: 12px; } .scoreboard dt { font-size: 9px; } .scoreboard dd { font-size: 15px; } .scoreboard .last-trick { min-width: 70px; } .scoreboard .last-trick dd { font-size: 11px; } }

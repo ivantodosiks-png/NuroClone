@@ -14,13 +14,13 @@ export class JointMotor {
     this.target = restAngle;
   }
 
-  step(stiffness = 1): void {
+  step(stiffness = 1, maxAcceleration = 0.0012): void {
     const error = wrapAngle(this.target - (this.child.angle - this.parent.angle));
     // Matter angularVelocity is normalized to 60 Hz. Convert to radians/ms.
     const speed = (this.child.angularVelocity - this.parent.angularVelocity) / (1000 / 60);
     const inertia = 1 / (this.parent.inverseInertia + this.child.inverseInertia);
-    const acceleration = error * 0.00022 * stiffness - speed * 0.025;
-    const torque = clamp(acceleration, -0.0007, 0.0007) * inertia * this.strength;
+    const acceleration = error * 0.00032 * stiffness - speed * 0.036 * Math.sqrt(stiffness);
+    const torque = clamp(acceleration, -maxAcceleration, maxAcceleration) * inertia * this.strength;
     this.child.torque += torque;
     this.parent.torque -= torque;
   }

@@ -14,8 +14,24 @@ export const PHYSICS = {
   maxFrameMs: 50,
   pixelsPerMeter: 95,
   gravity: 1.35,
-  grabRadius: 34,
-  driveAcceleration: 0.0000075,
+  swingForce: 0.00065,
+  rotationTorque: 0.10,
+  legRaiseStrength: 7,
+  legRaiseTargetAngle: -2.6,
+  tuckStrength: 3.2,
+  twistTorque: 0.9, // axial N*m, separate from Matter's planar torque units
+  poseTransitionSpeed: 7,
+  autoGrabDistance: 25,
+  autoGrabMaxVelocity: 9, // m/s at the hand, including angular velocity
+  autoGrabCooldown: 450, // simulation ms
+  landing: {
+    maxSpeed: 8.5, // m/s, measured BEFORE the contact solver removes velocity
+    maxAngularVelocity: 5, // rad/s
+    maxTwistVelocity: 9, // rad/s
+    maxTilt: 0.6, // radians from upright
+    footContactDistance: 15, // contact must be at the ankle end of a shin
+    settleMs: 220,
+  },
 };
 
 export const TRAINING = {

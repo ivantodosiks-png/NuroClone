@@ -1,34 +1,47 @@
 import Phaser from 'phaser';
-import { brand, icon } from '../ui/icons';
 import { GameScene } from './GameScene';
 
 export class MenuScene extends Phaser.Scene {
-  private root?: HTMLDivElement;
   constructor() { super('MenuScene'); }
 
   create(): void {
     if (!this.scene.isActive('GameScene')) this.scene.launch('GameScene');
     this.scene.bringToTop();
     const root = document.createElement('div');
-    this.root = root;
     root.className = 'menu';
     root.innerHTML = `
-      <header class="topbar"><div class="brand">${brand}</div><div class="session-label"><span class="status-dot"></span> ЛАБОРАТОРИЯ ДВИЖЕНИЯ <span class="separator">/</span> <b>01</b></div><span class="menu-build">PHYSICS PLAYGROUND</span></header>
-      <section class="menu-content"><div class="eyebrow"><span class="tiny-line"></span> МЕНЬШЕ ПРАВИЛ. БОЛЬШЕ ДВИЖЕНИЯ.</div><h1>Поймай<br>свой <em>импульс.</em></h1><p>Познакомься с Nuro.<br>Немного гимнастики, немного гравитации.<br>И полная свобода экспериментировать.</p><button class="primary-button" id="start-training">Начать тренировку ${icon('arrow')}</button><div class="menu-start-hint"><kbd>ENTER</kbd><span>или нажми, чтобы начать</span></div><div class="menu-tags"><span><i></i> Физическое тело</span><span><i></i> Живое движение</span></div></section>
-      <div class="nuro-tag"><span class="tag-line"></span><div>NURO <span>ТВОЙ ВНУТРЕННИЙ ГИМНАСТ</span></div></div>
-      <div class="menu-bottom"><div><span class="eyebrow">ТВОЯ ПЕРВАЯ ТРЕНИРОВКА</span><h3><span>01</span> Знакомство с перекладиной ${icon('arrow')}</h3></div><span class="menu-device">ДЛЯ КЛАВИАТУРЫ <span class="keyboard-symbol">⌨</span><small>A / D &nbsp; W / S &nbsp; SPACE</small></span></div>
-      <footer class="menu-footer"><span>ДОВЕРЬСЯ ФИЗИКЕ. НАЙДИ СВОЙ РИТМ.</span><span>NUROCLONE <b>·</b> TRAINING BUILD 01</span></footer>`;
+      <section class="menu-card">
+        <h1>NUROCLONE</h1>
+        <div data-panel="main">
+          <button data-action="play">PLAY</button>
+          <button data-action="controls">CONTROLS</button>
+        </div>
+        <div data-panel="controls" hidden>
+          <dl class="controls-list">
+            <div><dt>W</dt><dd>поднять ноги</dd></div>
+            <div><dt>A / D</dt><dd>вращение</dd></div>
+            <div><dt>L</dt><dd>группировка</dd></div>
+            <div><dt>K</dt><dd>twist</dd></div>
+            <div><dt>SPACE</dt><dd>отпустить перекладину</dd></div>
+            <div><dt>R</dt><dd>restart</dd></div>
+            <div><dt>ESC</dt><dd>pause</dd></div>
+          </dl>
+          <button data-action="back">BACK</button>
+        </div>
+      </section>`;
     document.querySelector('#ui')!.append(root);
-    const start = () => {
-      (this.scene.get('GameScene') as GameScene).beginTraining();
-      this.scene.stop();
-    };
-    root.querySelector('button')!.addEventListener('click', start, { once: true });
-    this.input.keyboard!.once('keydown-ENTER', start);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.root?.remove();
-      this.root = undefined;
-      this.input.keyboard?.off('keydown-ENTER', start);
-    });
+    const abort = new AbortController();
+    root.addEventListener('click', event => {
+      const action = (event.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
+      if (action === 'play') {
+        (this.scene.get('GameScene') as GameScene).beginTraining();
+        this.scene.stop();
+      } else if (action === 'controls' || action === 'back') {
+        root.querySelector<HTMLElement>('[data-panel="main"]')!.hidden = action === 'controls';
+        root.querySelector<HTMLElement>('[data-panel="controls"]')!.hidden = action !== 'controls';
+        root.querySelector<HTMLButtonElement>(action === 'controls' ? '[data-action="back"]' : '[data-action="controls"]')!.focus();
+      }
+    }, { signal: abort.signal });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { abort.abort(); root.remove(); });
   }
 }

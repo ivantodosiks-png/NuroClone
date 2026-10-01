@@ -5,10 +5,9 @@ import { Gymnast, type Hand, type Side } from './Gymnast';
 
 export class GrabSystem {
   private readonly grips = new Map<Side, Constraint>();
-  private seekingUntil = 0;
+  private releasedAt = -Infinity;
   private time = 0;
   private readonly markers: Phaser.GameObjects.Graphics;
-  lastAction: 'held' | 'released' | 'missed' | 'searching' = 'held';
 
   constructor(private readonly scene: Phaser.Scene, private readonly gymnast: Gymnast, private readonly bar: Body) {
     this.markers = scene.add.graphics().setDepth(6);
@@ -16,7 +15,7 @@ export class GrabSystem {
   }
 
   get count(): number { return this.grips.size; }
-  get isSeeking(): boolean { return this.seekingUntil > this.time; }
+  get coolingDown(): boolean { return this.time - this.releasedAt < PHYSICS.autoGrabCooldown; }
 
   nearestPoint(hand: Hand): Point {
     const p = this.gymnast.handPoint(hand);
@@ -24,28 +23,25 @@ export class GrabSystem {
   }
 
   get canGrab(): boolean {
+    if (this.coolingDown) return false;
     return this.gymnast.hands.some(hand => {
       const p = this.gymnast.handPoint(hand);
       const target = this.nearestPoint(hand);
-      return Math.hypot(p.x - target.x, p.y - target.y) <= PHYSICS.grabRadius;
+      return !this.grips.has(hand.side) && Math.hypot(p.x - target.x, p.y - target.y) <= PHYSICS.autoGrabDistance && this.handSpeed(hand) <= PHYSICS.autoGrabMaxVelocity;
     });
   }
 
-  toggle(): void {
-    if (this.count > 0) {
-      this.release();
-      return;
-    }
-    // A brief buffer helps catch a moving hand. Only proximity can create a grip.
-    this.seekingUntil = this.time + 240;
-    this.lastAction = 'searching';
-    this.tryGrab();
+  private handSpeed(hand: Hand): number {
+    const offset = rotate(hand.local, hand.body.angle);
+    return Math.hypot(
+      hand.body.velocity.x - hand.body.angularVelocity * offset.y,
+      hand.body.velocity.y + hand.body.angularVelocity * offset.x,
+    ) * 60 / PHYSICS.pixelsPerMeter;
   }
 
-  step(delta: number): void {
+  step(delta: number, enabled = true): void {
     this.time += delta;
-    if (this.isSeeking) this.tryGrab();
-    else if (this.lastAction === 'searching') this.lastAction = 'missed';
+    if (enabled && !this.coolingDown) this.tryGrab();
   }
 
   private tryGrab(): void {
@@ -54,24 +50,23 @@ export class GrabSystem {
       const point = this.gymnast.handPoint(hand);
       const target = this.nearestPoint(hand);
       const distance = Math.hypot(point.x - target.x, point.y - target.y);
-      if (distance > PHYSICS.grabRadius) continue;
+      if (distance > PHYSICS.autoGrabDistance || this.handSpeed(hand) > PHYSICS.autoGrabMaxVelocity) continue;
       const offset = rotate(hand.local, hand.body.angle);
-      const constraint = this.scene.matter.add.constraint(this.bar, hand.body, Math.max(2, distance), 0.86, {
+      const constraint = this.scene.matter.add.constraint(this.bar, hand.body, Math.max(2, distance), 0.98, {
         label: `grip:${hand.side}`,
         pointA: { x: target.x - this.bar.position.x, y: target.y - this.bar.position.y },
         pointB: offset,
-        damping: 0.045,
+        damping: 0.08,
       });
       this.grips.set(hand.side, constraint);
-      this.lastAction = 'held';
     }
   }
 
   release(): void {
+    if (!this.count) return;
     for (const grip of this.grips.values()) this.scene.matter.world.removeConstraint(grip);
     this.grips.clear();
-    this.seekingUntil = 0;
-    this.lastAction = 'released';
+    this.releasedAt = this.time;
     // Deliberately do not write positions or velocities: release retains momentum.
   }
 
