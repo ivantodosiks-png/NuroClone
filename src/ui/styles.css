@@ -18,11 +18,4 @@ button:focus-visible { outline: 3px solid #91ae65; outline-offset: 4px; }
 .controls-list > div { display: flex; gap: 16px; padding: 10px 0; border-bottom: 1px solid #dde3d5; font-size: 13px; }
 .controls-list dt { width: 64px; flex-shrink: 0; font-weight: 600; }
 .controls-list dd { margin: 0; color: #65795a; }
-.hud { position: absolute; inset: 0; }
-.scoreboard { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); width: min(850px, calc(100vw - 40px)); margin: 0; display: flex; justify-content: space-between; gap: 24px; padding: 16px 24px; border: 1px solid #d6dfcb; border-radius: 7px; background: #f5f5efee; }
-.scoreboard dt { font-size: 11px; color: #7c8e70; margin-bottom: 7px; }
-.scoreboard dd { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
-.scoreboard .last-trick { flex: 1; min-width: 150px; }
-.scoreboard .last-trick dd { font-size: 14px; line-height: 1.5; }
 .pause-overlay { background: #f5f5efee; }
-@media (max-width: 680px) { .scoreboard { gap: 12px; padding: 12px; top: 12px; } .scoreboard dt { font-size: 9px; } .scoreboard dd { font-size: 15px; } .scoreboard .last-trick { min-width: 70px; } .scoreboard .last-trick dd { font-size: 11px; } }

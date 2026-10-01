@@ -1,97 +1,121 @@
 import Phaser from 'phaser';
-import { COLORS, TRAINING } from '../config/constants';
+import { BARS, TRAINING } from '../config/constants';
 import type { Body, Point } from '../physics/matter';
 
+export type Bar = { id: number; x: number; y: number; halfWidth: number; body: Body };
+
+/** Oblique depth is purely scenery. All colliders and grip anchors remain x/y. */
 export class TrainingLevel {
-  readonly bar: Body;
+  readonly bars: Bar[] = [];
+  private readonly sky: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Graphics;
-  private readonly trail: Phaser.GameObjects.Graphics;
-  private readonly points: Point[] = [];
-  private lastTrailAt = 0;
 
-  constructor(scene: Phaser.Scene) {
-    const { x, y } = TRAINING.bar;
-    const floor = TRAINING.floorY;
-    if (!scene.textures.exists('grid-dot')) {
-      const tile = scene.textures.createCanvas('grid-dot', 40, 40)!;
-      const context = tile.getContext();
-      context.fillStyle = '#dde3d9';
-      context.beginPath();
-      context.arc(20, 20, 0.85, 0, Math.PI * 2);
-      context.fill();
-      tile.refresh();
+  constructor(private readonly scene: Phaser.Scene) {
+    this.createSky();
+    this.sky = scene.add.image(0, 0, 'sandbox-sky').setDepth(-30).setScrollFactor(0);
+    const clouds = scene.add.graphics().setDepth(-20).setScrollFactor(0.16, 0.08);
+    for (let i = -3; i < 15; i++) {
+      const x = i * 380;
+      const y = 480 + Math.sin(i * 2.7) * 110;
+      clouds.fillStyle(0xffffff, 0.18).fillEllipse(x, y, 400, 54);
+      clouds.fillStyle(0xffffff, 0.14).fillEllipse(x + 80, y - 20, 230, 70);
     }
-    scene.add.tileSprite((TRAINING.left + TRAINING.right) / 2, (floor - 1000) / 2,
-      TRAINING.right - TRAINING.left, floor + 1000, 'grid-dot').setDepth(-6).setAlpha(0.65);
-    const backdrop = scene.add.graphics().setDepth(-5);
-    backdrop.fillStyle(COLORS.floor).fillRect(TRAINING.left, floor, TRAINING.right - TRAINING.left, 1800);
-    backdrop.lineStyle(1, 0xc6d0c3).lineBetween(TRAINING.left, floor, TRAINING.right, floor);
-    for (let gx = TRAINING.left; gx <= TRAINING.right; gx += 80) {
-      backdrop.lineStyle(1, 0xc6d0c3, 0.6).lineBetween(gx, floor, gx, floor + 8);
-    }
-
-    // The frame is scenery: only the horizontal bar and landing surfaces collide.
-    const frame = scene.add.graphics().setDepth(-3);
-    frame.lineStyle(1, 0xc9d4c6, 0.65).strokeCircle(x, y + 135, 276);
-    frame.lineStyle(1, 0xc9d4c6, 0.4).strokeCircle(x, y + 135, 320);
-    frame.lineStyle(2, 0xc0cdc0).lineBetween(x - 139, y + 10, x - 228, floor);
-    frame.lineBetween(x + 139, y + 10, x + 228, floor);
-    frame.lineStyle(8, 0xc1cebd).lineBetween(x - 139, y, x - 139, floor - 9);
-    frame.lineBetween(x + 139, y, x + 139, floor - 9);
-    frame.lineStyle(3, 0xe7eee0).lineBetween(x - 141, y + 10, x - 141, floor - 13);
-    frame.lineBetween(x + 137, y + 10, x + 137, floor - 13);
-    frame.fillStyle(0xabbca8).fillRoundedRect(x - 166, floor - 9, 55, 9, 4);
-    frame.fillRoundedRect(x + 111, floor - 9, 55, 9, 4);
-    frame.lineStyle(9, 0x90a58f).lineBetween(x - 149, y, x + 149, y);
-    frame.lineStyle(3, 0xb6c5af).lineBetween(x - 145, y - 3, x + 145, y - 3);
-    frame.lineStyle(7, COLORS.ink).lineBetween(x - TRAINING.bar.halfWidth, y, x + TRAINING.bar.halfWidth, y);
-    frame.fillStyle(COLORS.lime).fillCircle(x - 139, y, 5).fillCircle(x + 139, y, 5);
-    for (let bx = x - 32; bx < x + 36; bx += 6) {
-      frame.lineStyle(1, 0xadc28f, 0.55).lineBetween(bx, y - 3, bx - 2, y + 3);
-    }
-
-    const mat = scene.add.graphics().setDepth(-2);
-    mat.fillStyle(0xcedabf).fillRoundedRect(x - 234, floor - 14, 468, 14, 5);
-    mat.fillStyle(0xdbe5c8).fillRoundedRect(x - 234, floor - 18, 468, 11, 5);
-    mat.lineStyle(1, 0xb7c7aa).lineBetween(x - 217, floor - 8, x + 217, floor - 8);
-    mat.lineStyle(1, 0xc3d1b1).lineBetween(x, floor - 17, x, floor - 2);
-
-    scene.add.text(x + 159, y - 12, '01', { fontFamily: 'monospace', fontSize: '13px', color: '#84958c' }).setDepth(-2);
-    scene.add.text(x, floor + 33, 'N U R O   /   M O V E M E N T   L A B', {
-      fontFamily: 'Arial, sans-serif', fontSize: '10px', color: '#98a68e',
-    }).setOrigin(0.5).setDepth(-2);
-
-    scene.matter.add.rectangle((TRAINING.left + TRAINING.right) / 2, floor + 100, TRAINING.right - TRAINING.left, 200, {
-      isStatic: true, label: 'floor', friction: 0.85, restitution: 0.05,
-    });
-    scene.matter.add.rectangle(x, floor - 8, 468, 20, {
-      isStatic: true, label: 'landing-mat', friction: 0.9, restitution: 0.03, chamfer: { radius: 5 },
-    });
-    this.bar = scene.matter.add.rectangle(x, y, TRAINING.bar.halfWidth * 2, 7, {
-      isStatic: true, isSensor: true, label: 'horizontal-bar',
-    });
-    this.shadow = scene.add.graphics().setDepth(-1);
-    this.trail = scene.add.graphics().setDepth(0);
-  }
-
-  render(center: Point, speed: number, time: number, active: boolean): void {
-    this.shadow.clear();
-    const height = Math.max(0, TRAINING.floorY - center.y);
-    const width = 30 + height * 0.13;
-    this.shadow.fillStyle(0x456447, Math.max(0.025, 0.1 - height * 0.00013));
-    this.shadow.fillEllipse(center.x, TRAINING.floorY - 18, width, 9);
-    if (active && time - this.lastTrailAt > 60) {
-      this.lastTrailAt = time;
-      this.points.push({ ...center });
-      if (this.points.length > 24) this.points.shift();
-    }
-    this.trail.clear();
-    if (speed > 0.6) {
-      this.points.forEach((p, index) => {
-        this.trail.fillStyle(0x9bac83, (index / this.points.length) * 0.22).fillCircle(p.x, p.y, 2);
+    const back = scene.add.graphics().setDepth(-4);
+    const front = scene.add.graphics().setDepth(8);
+    for (let i = 0; i < BARS.length; i++) {
+      const spec = BARS[i];
+      this.bars.push({ ...spec, id: i, body: scene.matter.add.rectangle(spec.x, spec.y, spec.halfWidth * 2, 6, {
+        isStatic: true, isSensor: true, label: `bar:${i}`,
+      }) });
+      this.drawStation(back, front, spec.x, spec.y);
+      scene.matter.add.rectangle(spec.x, spec.y + TRAINING.platformDrop + 16, 202, 32, {
+        isStatic: true, label: `platform:${i}`, friction: 0.8, restitution: 0.02,
+        chamfer: { radius: 4 },
       });
     }
+    this.shadow = scene.add.graphics().setDepth(-2);
   }
 
-  clearTrail(): void { this.points.length = 0; this.trail.clear(); }
+  private createSky(): void {
+    if (this.scene.textures.exists('sandbox-sky')) return;
+    const texture = this.scene.textures.createCanvas('sandbox-sky', 1600, 1000)!;
+    const ctx = texture.getContext();
+    const gradient = ctx.createLinearGradient(0, 0, 0, 1000);
+    gradient.addColorStop(0, '#9ec7dc');
+    gradient.addColorStop(0.6, '#d6e9ee');
+    gradient.addColorStop(1, '#f6f7ec');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1600, 1000);
+    const sun = ctx.createRadialGradient(1240, 160, 0, 1240, 160, 370);
+    sun.addColorStop(0, 'rgba(255,255,243,.8)');
+    sun.addColorStop(0.16, 'rgba(255,255,243,.35)');
+    sun.addColorStop(1, 'rgba(255,255,243,0)');
+    ctx.fillStyle = sun;
+    ctx.fillRect(800, 0, 800, 600);
+    // Atmospheric ridgelines far below the suspended apparatus.
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.fillStyle = ['#c1d9df', '#cee1e4', '#e0ebeb'][layer];
+      ctx.beginPath();
+      ctx.moveTo(0, 1000);
+      for (let x = 0; x <= 1650; x += 55) {
+        const y = 770 + layer * 65 + Math.sin(x * 0.005 + layer) * 45 + Math.cos(x * 0.011 + layer * 3) * 25;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(1600, 1000);
+      ctx.closePath();
+      ctx.fill();
+    }
+    texture.refresh();
+  }
+
+  private drawStation(back: Phaser.GameObjects.Graphics, front: Phaser.GameObjects.Graphics, x: number, y: number): void {
+    const base = y + TRAINING.platformDrop;
+    const poly = (g: Phaser.GameObjects.Graphics, color: number, points: number[], alpha = 1) =>
+      g.fillStyle(color, alpha).fillPoints(Array.from({length: points.length / 2}, (_, i) => ({x: points[i * 2], y: points[i * 2 + 1]})), true);
+    // A floating slab: top, front fascia and right side have distinct lighting.
+    poly(back, 0x829eaa, [x-154,base+30, x+48,base+30, x+48,base+66, x-154,base+66]);
+    poly(back, 0x638391, [x+48,base+30, x+154,base-30, x+154,base+6, x+48,base+66]);
+    poly(back, 0xe6f0ee, [x-154,base+30, x-48,base-30, x+154,base-30, x+48,base+30]);
+    back.lineStyle(2, 0xfafff4).lineBetween(x-154,base+30,x+48,base+30);
+    back.lineStyle(3, 0xafc8cd).lineBetween(x-148,base+39,x+44,base+39);
+    // Slim underside ribs make the thickness apparent from the camera angle.
+    for (let dx = -130; dx < 40; dx += 27) back.lineStyle(1, 0x678996, 0.6).lineBetween(x+dx,base+44,x+dx,base+61);
+    // The y=base physics surface cuts the top slab through the gameplay plane.
+    poly(back, 0xc2d8d9, [x-96,base+4, x-79,base-6, x+100,base-6, x+83,base+4]);
+    // Long, diagonal cast shadows on the deck, matching the upper-right sunlight.
+    poly(back, 0x4d7282, [x+47,base-28,x+56,base-28,x+5,base+12,x-4,base+12], 0.2);
+    back.fillStyle(0x728e9b).fillEllipse(x+53,base-30,29,11);
+    // Far upright and bracing sit behind Nuro.
+    back.lineStyle(3, 0x9eb8c2).lineBetween(x+111,base-29,x+54,y-30);
+    back.lineStyle(12, 0x93afb9).lineBetween(x+53,base-30,x+53,y-30);
+    back.lineStyle(3, 0xd6e7e8).lineBetween(x+50,base-34,x+50,y-32);
+    back.fillStyle(0x7c9aa5).fillCircle(x+53,y-30,7);
+    // Cylindrical bar runs along projected depth; the grip zone crosses z=0.
+    back.lineStyle(9, 0x638393).lineBetween(x-53,y+30,x+53,y-30);
+    back.lineStyle(3, 0xe1efed).lineBetween(x-53,y+27,x+53,y-33);
+    back.lineStyle(9, 0x2c5363).lineBetween(x-13,y+7.4,x+13,y-7.4);
+    back.lineStyle(2, 0xc5e5b0).lineBetween(x-11,y+4.3,x+11,y-8);
+    // The near upright visibly occludes objects passing behind it.
+    front.fillStyle(0x698b99).fillEllipse(x-53,base+30,30,11);
+    front.lineStyle(13, 0x527887).lineBetween(x-53,base+28,x-53,y+30);
+    front.lineStyle(4, 0xaac5ce).lineBetween(x-56,base+25,x-56,y+29);
+    front.lineStyle(2, 0x759aa8).lineBetween(x-111,base+29,x-54,y+34);
+    front.fillStyle(0xd8e9e8).fillEllipse(x-53,y+30,14,13);
+    front.fillStyle(0x70929f).fillEllipse(x-53,y+30,7,7);
+  }
+
+  render(center: Point): void {
+    const camera = this.scene.cameras.main;
+    this.sky.setPosition(camera.width / 2, camera.height / 2).setDisplaySize(camera.width / camera.zoom, camera.height / camera.zoom);
+    this.shadow.clear();
+    // The projected shadow is the sole visual offset; Nuro's bodies are never moved in z.
+    for (const bar of this.bars) {
+      const top = bar.y + TRAINING.platformDrop;
+      const height = top - center.y;
+      if (height < -20 || Math.abs(center.x - bar.x) > 88) continue;
+      const alpha = Math.max(0.025, 0.16 - Math.max(0,height) * 0.00022);
+      this.shadow.fillStyle(0x335c6b, alpha);
+      this.shadow.fillEllipse(center.x - 10, top + 2, 28 + Math.max(0,height) * 0.09, 9);
+    }
+  }
 }

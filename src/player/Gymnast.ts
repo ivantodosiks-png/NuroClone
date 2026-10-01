@@ -41,13 +41,14 @@ export class Gymnast {
     this.joint('spine', this.torso, this.pelvis, { x, y: y + 132 }, 0, 1.6);
 
     for (const side of ['left', 'right'] as const) {
-      const sign = side === 'left' ? -1 : 1;
-      const shoulder = { x: x + sign * 7, y: y + 91 };
-      const elbow = { x: x + sign * 19, y: y + 47 };
-      const wrist = { x: x + sign * 24, y: y + 2 };
-      const hip = { x: x + sign * 7, y: y + 152 };
-      const knee = { x: x + sign * 12, y: y + 198 };
-      const ankle = { x: x + sign * 17, y: y + 244 };
+      // Sagittal silhouette: matching limb lengths, only 5 px between near/far limbs.
+      const offset = side === 'left' ? -2.5 : 2.5;
+      const shoulder = { x: x + offset, y: y + 91 };
+      const elbow = { x: x + offset + 6, y: y + 47 };
+      const wrist = { x: x + offset + 4, y: y + 2 };
+      const hip = { x: x + offset, y: y + 152 };
+      const knee = { x: x + offset, y: y + 198 };
+      const ankle = { x: x + offset, y: y + 244 };
       const upperArm = this.bone(`${side}UpperArm`, shoulder, elbow, 10, 0.95);
       const lowerArm = this.bone(`${side}LowerArm`, elbow, wrist, 9, 0.75);
       const thigh = this.bone(`${side}Thigh`, hip, knee, 12, 1.4);
@@ -101,7 +102,8 @@ export class Gymnast {
     this.limbMotors.set(name, motor);
   }
 
-  step(direction: number, pose: Pose, grabbed: boolean, twisting = false, grounded = false): void {
+  step(direction: number, pose: Pose, gripAnchor: Point | null, twisting = false, grounded = false): void {
+    const grabbed = gripAnchor !== null;
     this.pose = pose;
     const dt = PHYSICS.stepMs / 1000;
     const blend = 1 - Math.exp(-PHYSICS.poseTransitionSpeed * dt);
@@ -132,9 +134,9 @@ export class Gymnast {
     const totalInertia = this.bodies.reduce((sum, body) => sum + body.inertia, 0);
     for (const body of this.bodies) {
       body.torque -= this.drive * PHYSICS.rotationTorque * body.inertia / totalInertia;
-      if (grabbed && Math.abs(this.drive) > 0.001) {
-        const dx = body.position.x - TRAINING.bar.x;
-        const dy = body.position.y - TRAINING.bar.y;
+      if (gripAnchor && Math.abs(this.drive) > 0.001) {
+        const dx = body.position.x - gripAnchor.x;
+        const dy = body.position.y - gripAnchor.y;
         const distance = Math.max(40, Math.hypot(dx, dy));
         Matter.Body.applyForce(body, body.position, {
           x: this.drive * dy / distance * body.mass * PHYSICS.swingForce,
@@ -234,12 +236,13 @@ export class Gymnast {
       g.lineStyle(w, color, 1).lineBetween(a.x, a.y, b.x, b.y);
       g.fillStyle(color).fillCircle(a.x, a.y, w / 2).fillCircle(b.x, b.y, w / 2);
     };
-    const facing = Math.cos(this.twistAngle);
-    const leftColor = facing >= 0 ? COLORS.farLimb : COLORS.ink;
-    const rightColor = facing >= 0 ? COLORS.ink : COLORS.farLimb;
+    // Fixed side profile, including during K. Twist is shown by the suit seam,
+    // never by yawing the face or separating the hands out of the play plane.
+    const leftColor = COLORS.farLimb;
+    const rightColor = COLORS.ink;
     for (const name of ['leftUpperArm', 'leftLowerArm', 'leftThigh', 'leftShin']) drawBone(name, leftColor);
-    drawBone('torso', COLORS.ink, 12 + 4 * Math.abs(facing));
-    drawBone('pelvis', COLORS.ink, 15 + 6 * Math.abs(facing));
+    drawBone('torso', COLORS.ink, 16);
+    drawBone('pelvis', COLORS.ink, 19);
     for (const name of ['rightUpperArm', 'rightLowerArm', 'rightThigh', 'rightShin']) drawBone(name, rightColor);
 
     for (const side of ['left', 'right']) {
@@ -251,12 +254,14 @@ export class Gymnast {
       g.fillStyle(side === 'left' ? COLORS.farLimb : COLORS.ink).fillCircle(toe.x, toe.y, 4);
     }
     const p = this.head.position;
-    g.fillStyle(COLORS.background).fillCircle(p.x, p.y, 14);
+    g.fillStyle(0xf5f5e9).fillCircle(p.x, p.y, 14);
     g.lineStyle(4, COLORS.ink).strokeCircle(p.x, p.y, 14);
-    const eye = worldPoint(this.head, { x: 6 * facing, y: -2 });
+    const nose = worldPoint(this.head, { x: 14, y: 1 });
+    g.fillStyle(COLORS.ink).fillCircle(nose.x, nose.y, 3);
+    const eye = worldPoint(this.head, { x: 6, y: -3 });
     g.fillStyle(COLORS.ink).fillCircle(eye.x, eye.y, 2);
     const chest = worldPoint(this.torso, { x: 7 * Math.sin(this.twistAngle), y: -7 });
-    g.fillStyle(COLORS.lime, 0.3 + 0.7 * Math.max(0, facing)).fillCircle(chest.x, chest.y, 4);
+    g.fillStyle(COLORS.lime, 0.7 + 0.3 * Math.cos(this.twistAngle)).fillCircle(chest.x, chest.y, 3);
   }
 
   destroy(): void {

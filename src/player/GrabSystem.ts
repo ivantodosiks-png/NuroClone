@@ -1,34 +1,30 @@
 import Phaser from 'phaser';
-import { PHYSICS, TRAINING } from '../config/constants';
-import { clamp, rotate, type Body, type Constraint, type Point } from '../physics/matter';
-import { Gymnast, type Hand, type Side } from './Gymnast';
+import { PHYSICS } from '../config/constants';
+import { clamp, rotate, type Constraint, type Point } from '../physics/matter';
+import { Gymnast, type Hand } from './Gymnast';
+import type { Bar } from '../levels/TrainingLevel';
 
 export class GrabSystem {
-  private readonly grips = new Map<Side, Constraint>();
+  private grips: [Constraint, Constraint] | null = null;
+  private heldBar: Bar | null = null;
   private releasedAt = -Infinity;
   private time = 0;
   private readonly markers: Phaser.GameObjects.Graphics;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly gymnast: Gymnast, private readonly bar: Body) {
+  constructor(private readonly scene: Phaser.Scene, private readonly gymnast: Gymnast, private readonly bars: readonly Bar[]) {
     this.markers = scene.add.graphics().setDepth(6);
     this.tryGrab();
   }
 
-  get count(): number { return this.grips.size; }
+  get state(): 'GRABBED' | 'RELEASED' { return this.grips ? 'GRABBED' : 'RELEASED'; }
+  get count(): 0 | 2 { return this.grips ? 2 : 0; }
+  get barId(): number | null { return this.heldBar?.id ?? null; }
+  get anchor(): Point | null { return this.heldBar ? { x: this.heldBar.x, y: this.heldBar.y } : null; }
   get coolingDown(): boolean { return this.time - this.releasedAt < PHYSICS.autoGrabCooldown; }
 
-  nearestPoint(hand: Hand): Point {
+  private target(hand: Hand, bar: Bar): Point {
     const p = this.gymnast.handPoint(hand);
-    return { x: clamp(p.x, TRAINING.bar.x - TRAINING.bar.halfWidth, TRAINING.bar.x + TRAINING.bar.halfWidth), y: TRAINING.bar.y };
-  }
-
-  get canGrab(): boolean {
-    if (this.coolingDown) return false;
-    return this.gymnast.hands.some(hand => {
-      const p = this.gymnast.handPoint(hand);
-      const target = this.nearestPoint(hand);
-      return !this.grips.has(hand.side) && Math.hypot(p.x - target.x, p.y - target.y) <= PHYSICS.autoGrabDistance && this.handSpeed(hand) <= PHYSICS.autoGrabMaxVelocity;
-    });
+    return { x: clamp(p.x, bar.x - bar.halfWidth, bar.x + bar.halfWidth), y: bar.y };
   }
 
   private handSpeed(hand: Hand): number {
@@ -39,47 +35,67 @@ export class GrabSystem {
     ) * 60 / PHYSICS.pixelsPerMeter;
   }
 
-  step(delta: number, enabled = true): void {
+  private candidate(): Bar | null {
+    if (this.grips || this.coolingDown) return null;
+    let nearest: Bar | null = null;
+    let bestDistance = Infinity;
+    for (const bar of this.bars) {
+      let maxDistance = 0;
+      const bothReach = this.gymnast.hands.every(hand => {
+        const p = this.gymnast.handPoint(hand);
+        const target = this.target(hand, bar);
+        const distance = Math.hypot(p.x - target.x, p.y - target.y);
+        maxDistance = Math.max(maxDistance, distance);
+        return distance <= PHYSICS.autoGrabDistance && this.handSpeed(hand) <= PHYSICS.autoGrabMaxVelocity;
+      });
+      if (bothReach && maxDistance < bestDistance) {
+        nearest = bar;
+        bestDistance = maxDistance;
+      }
+    }
+    return nearest;
+  }
+
+  get canGrab(): boolean { return this.candidate() !== null; }
+
+  step(delta: number): void {
     this.time += delta;
-    if (enabled && !this.coolingDown) this.tryGrab();
+    this.tryGrab();
   }
 
   private tryGrab(): void {
-    for (const hand of this.gymnast.hands) {
-      if (this.grips.has(hand.side)) continue;
+    const bar = this.candidate();
+    if (!bar) return;
+    // Both hands are validated against ONE bar before either constraint exists.
+    const createGrip = (hand: Hand): Constraint => {
       const point = this.gymnast.handPoint(hand);
-      const target = this.nearestPoint(hand);
-      const distance = Math.hypot(point.x - target.x, point.y - target.y);
-      if (distance > PHYSICS.autoGrabDistance || this.handSpeed(hand) > PHYSICS.autoGrabMaxVelocity) continue;
-      const offset = rotate(hand.local, hand.body.angle);
-      const constraint = this.scene.matter.add.constraint(this.bar, hand.body, Math.max(2, distance), 0.98, {
-        label: `grip:${hand.side}`,
-        pointA: { x: target.x - this.bar.position.x, y: target.y - this.bar.position.y },
-        pointB: offset,
-        damping: 0.08,
+      const target = this.target(hand, bar);
+      return this.scene.matter.add.constraint(bar.body, hand.body, Math.max(2, Math.hypot(point.x - target.x, point.y - target.y)), 0.92, {
+        label: `grip:${bar.id}:${hand.side}`,
+        pointA: { x: target.x - bar.x, y: target.y - bar.y },
+        pointB: rotate(hand.local, hand.body.angle),
+        damping: 0.015,
       });
-      this.grips.set(hand.side, constraint);
-    }
+    };
+    this.grips = [createGrip(this.gymnast.hands[0]), createGrip(this.gymnast.hands[1])];
+    this.heldBar = bar;
+    // Never set a body position, velocity, angle or angular velocity here.
   }
 
   release(): void {
-    if (!this.count) return;
-    for (const grip of this.grips.values()) this.scene.matter.world.removeConstraint(grip);
-    this.grips.clear();
+    if (!this.grips) return;
+    for (const grip of this.grips) this.scene.matter.world.removeConstraint(grip);
+    this.grips = null;
+    this.heldBar = null;
     this.releasedAt = this.time;
-    // Deliberately do not write positions or velocities: release retains momentum.
   }
 
   render(): void {
     this.markers.clear();
+    if (!this.grips) return;
     for (const hand of this.gymnast.hands) {
-      const point = this.gymnast.handPoint(hand);
-      if (this.grips.has(hand.side)) {
-        this.markers.lineStyle(2, 0x97b862, 0.9).strokeCircle(point.x, point.y, 8);
-        this.markers.fillStyle(0xd4ef8c).fillCircle(point.x, point.y, 4);
-      } else if (this.canGrab) {
-        this.markers.lineStyle(1.5, 0x97b862, 0.65).strokeCircle(point.x, point.y, 10);
-      }
+      const p = this.gymnast.handPoint(hand);
+      this.markers.fillStyle(0xd4ef8c).fillCircle(p.x, p.y, 4);
     }
   }
 

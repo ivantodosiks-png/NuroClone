@@ -18,13 +18,13 @@ export class MenuScene extends Phaser.Scene {
         </div>
         <div data-panel="controls" hidden>
           <dl class="controls-list">
-            <div><dt>W</dt><dd>поднять ноги</dd></div>
-            <div><dt>A / D</dt><dd>вращение</dd></div>
-            <div><dt>L</dt><dd>группировка</dd></div>
-            <div><dt>K</dt><dd>twist</dd></div>
-            <div><dt>SPACE</dt><dd>отпустить перекладину</dd></div>
-            <div><dt>R</dt><dd>restart</dd></div>
-            <div><dt>ESC</dt><dd>pause</dd></div>
+            <div><dt>W</dt><dd>Raise Legs</dd></div>
+            <div><dt>A/D</dt><dd>Rotate</dd></div>
+            <div><dt>L</dt><dd>Tuck</dd></div>
+            <div><dt>K</dt><dd>Twist</dd></div>
+            <div><dt>SPACE</dt><dd>Release</dd></div>
+            <div><dt>R</dt><dd>Restart</dd></div>
+            <div><dt>ESC</dt><dd>Pause</dd></div>
           </dl>
           <button data-action="back">BACK</button>
         </div>
