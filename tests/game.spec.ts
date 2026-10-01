@@ -28,7 +28,7 @@ test('minimal menu, controls, no HUD, side-view scene and two-hand start', async
   await page.goto('/');
   await expect(page.getByRole('button')).toHaveCount(2);
   await page.getByRole('button', {name:'CONTROLS',exact:true}).click();
-  await expect(page.locator('.controls-list dd')).toHaveText(['Raise Legs','Rotate','Tuck','Twist','Release','Restart','Pause']);
+  await expect(page.locator('.controls-list dd')).toHaveText(['Straight','Tuck','Twist','Release','Restart','Pause']);
   await page.getByRole('button', {name:'BACK',exact:true}).click();
   await page.getByRole('button', {name:'PLAY',exact:true}).click();
   await expect(page.locator('#ui')).toBeEmpty();
@@ -41,35 +41,56 @@ test('minimal menu, controls, no HUD, side-view scene and two-hand start', async
   expect(s.bars.every(bar => !bar.isSensor)).toBe(true);
   expect(Math.abs(s.hands[0].x-s.hands[1].x)).toBeLessThan(9);
   expect(Math.abs(s.feet[0].x-s.feet[1].x)).toBeLessThan(12);
-  expect(Math.abs(s.jointAngles.rightHip)).toBeLessThan(0.2);
-  expect(s.speed).toBeLessThan(0.3);
+  expect(s.jointAngles.rightHip).toBeLessThan(-2);
+  expect(s.jointAngles.spine).toBeLessThan(-0.15);
   expect(Math.max(...s.joints.map(j=>j.error))).toBeLessThan(2);
   await page.screenshot({path:'test-results/sandbox.png'});
   expect(errors).toEqual([]);
 });
 
-test('W raises straight legs, pumps and lowers; L compacts the ragdoll', async ({page}) => {
+test('high base pose, W straight, stronger L tuck and smooth return', async ({page}) => {
   await start(page);
-  await advance(page,500);
-  const initial = await snapshot(page);
+  const poses=await fixture(page,`
+    scene.restart();const poses=[];
+    for(const [pose,steps] of [['base',240],['straight',180],['base',180],['tuck',180],['base',180]]){
+      scene.controller.keys.straight.isDown=pose==='straight';scene.controller.keys.tuck.isDown=pose==='tuck';
+      for(let t=0;t<steps;t++)scene.update(0,1000/120);
+      poses.push(scene.snapshot());
+    }
+    return poses;
+  `) as Snapshot[];
+  const [base,straight,afterW,tuck,afterL]=poses;
+  for(const s of [base,afterW,afterL]){
+    expect(s.pose).toBe('base');
+    expect(s.jointAngles.rightHip).toBeLessThan(-2.35);
+    expect(s.jointAngles.rightKnee).toBeGreaterThan(0.15);
+    expect(s.jointAngles.rightKnee).toBeLessThan(0.5);
+    expect(s.jointAngles.spine).toBeLessThan(-0.15);
+    expect(s.jointAngles.spine).toBeGreaterThan(-0.4);
+    expect(Math.abs(s.jointAngles.neck)).toBeLessThan(0.1);
+    expect(Math.abs(s.jointAngles.rightShoulder)).toBeLessThan(0.2);
+    expect(Math.max(...s.feet.map(f=>f.y))).toBeLessThan(straight.feet[0].y-120);
+    expect(Math.abs(s.hands[0].x-s.hands[1].x)).toBeLessThan(12);
+  }
+  expect(straight.pose).toBe('straight');
+  expect(Math.abs(straight.jointAngles.rightHip)).toBeLessThan(0.15);
+  expect(Math.abs(straight.jointAngles.rightKnee)).toBeLessThan(0.1);
+  expect(Math.abs(straight.jointAngles.spine)).toBeLessThan(0.1);
+  expect(straight.inertia).toBeGreaterThan(base.inertia*1.7);
+  expect(tuck.jointAngles.rightKnee).toBeGreaterThan(2.5);
+  expect(tuck.jointAngles.rightHip).toBeLessThan(base.jointAngles.rightHip);
+  expect(tuck.jointAngles.spine).toBeLessThan(base.jointAngles.spine);
+  expect(tuck.inertia).toBeLessThan(base.inertia*0.92);
+  // Real keyboard mappings, including removal of A/D.
   await page.keyboard.down('w');
-  await page.waitForTimeout(50);
-  await advance(page,1100);
-  const raised = await snapshot(page);
-  expect(raised.jointAngles.rightHip).toBeLessThan(-1.6);
-  expect(Math.abs(raised.jointAngles.rightKnee)).toBeLessThan(0.4);
-  expect(raised.speed).toBeGreaterThan(initial.speed+0.1);
+  await expect.poll(async()=>(await snapshot(page)).pose).toBe('straight');
   await page.keyboard.up('w');
-  await page.waitForTimeout(40);
-  await advance(page,1300);
-  expect(Math.abs((await snapshot(page)).jointAngles.rightHip)).toBeLessThan(0.5);
   await page.keyboard.down('l');
-  await page.waitForTimeout(50);
-  await advance(page,1100);
-  const tucked = await snapshot(page);
-  expect(tucked.jointAngles.rightKnee).toBeGreaterThan(1.7);
-  expect(tucked.inertia).toBeLessThan(initial.inertia*0.8);
+  await expect.poll(async()=>(await snapshot(page)).pose).toBe('tuck');
   await page.keyboard.up('l');
+  await expect.poll(async()=>(await snapshot(page)).pose).toBe('base');
+  const keys=await fixture(page,'return Object.keys(scene.controller.keys);');
+  expect(keys).toEqual(['straight','tuck','twist','release','restart','pause']);
 });
 
 test('atomic release preserves every velocity; cooldown and no single-hand grab', async ({page}) => {
@@ -181,7 +202,7 @@ test('R repeatedly resets all velocities and removes old grips; Esc pauses/menu'
     expect(s.grabs).toBe(2);
     expect(s.barId).toBe(0);
     expect(s.worldBodies).toBe(21);
-    expect(s.worldConstraints).toBe(12);
+    expect(s.worldConstraints).toBe(14);
     expect(s.bodies.every(b=>b.vx===0&&b.vy===0&&b.angularVelocity===0)).toBe(true);
     expect(s.twistVelocity).toBe(0);
   }
@@ -262,6 +283,7 @@ test('solid bars stop head, torso, hands and legs, including fast impacts', asyn
           const body=scene.gymnast.bodies.find(b=>b.label==='nuro:'+part);
           // Isolate each actual Nuro collider to identify its contact unambiguously.
           for(const joint of scene.gymnast.joints)scene.matter.world.removeConstraint(joint);
+          for(const stop of scene.gymnast.waistStops)scene.matter.world.removeConstraint(stop);
           for(const b of scene.gymnast.bodies)if(b!==body)scene.matter.world.remove(b);
           scene.gymnast.step=()=>{};
           const bar=scene.level.bars[0];
@@ -322,4 +344,39 @@ test('swing, release, same-bar regrab and a chain of two transfers use only cont
   for(const [name,bar] of [['same',0],['first',1],['second',2]] as const){
     expect(result[name]).toEqual({released:'RELEASED',bar,count:2,alwaysPaired:true});
   }
+});
+
+
+test('transfer exploration', async ({page})=>{
+ test.setTimeout(120000);await start(page);
+ const r=await fixture(page,`
+   const draw=scene.renderScene;scene.renderScene=()=>{};
+   const candidates=[],trials=[];
+   try{
+     scene.restart();
+     for(let t=0;t<4800;t++){
+       scene.controller.keys.straight.isDown=t%160<80;
+       scene.update(0,1000/120);
+       const v=scene.gymnast.velocity;
+       if(t%10===0&&v.x>220&&v.y<-70)candidates.push({step:t+1,v});
+     }
+     const selected=candidates.filter((c,i)=>i%Math.max(1,Math.floor(candidates.length/30))===0);
+     for(const {step} of selected){
+       for(const air of ['base','straight',40,80]){
+         scene.restart();
+         for(let t=0;t<step;t++){scene.controller.keys.straight.isDown=t%160<80;scene.update(0,1000/120);}
+         const v=scene.gymnast.velocity;
+         scene.controller.pending.add('release');scene.update(0,0);
+         for(let t=0;t<240&&!scene.grabs.count;t++){
+           scene.controller.keys.straight.isDown=air==='straight';
+           scene.controller.keys.tuck.isDown=typeof air==='number'&&t<air;
+           scene.update(0,1000/120);
+         }
+         trials.push({step,air,v,bar:scene.grabs.barId});
+       }
+     }
+   }finally{scene.renderScene=draw;scene.restart();}
+   return {candidates:candidates.length,winners:trials.filter(t=>t.bar!==null),sample:trials.slice(0,8)};
+ `);
+ console.log(JSON.stringify(r));
 });

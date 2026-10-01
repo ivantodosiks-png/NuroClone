@@ -18,8 +18,7 @@ export class MenuScene extends Phaser.Scene {
         </div>
         <div data-panel="controls" hidden>
           <dl class="controls-list">
-            <div><dt>W</dt><dd>Raise Legs</dd></div>
-            <div><dt>A/D</dt><dd>Rotate</dd></div>
+            <div><dt>W</dt><dd>Straight</dd></div>
             <div><dt>L</dt><dd>Tuck</dd></div>
             <div><dt>K</dt><dd>Twist</dd></div>
             <div><dt>SPACE</dt><dd>Release</dd></div>

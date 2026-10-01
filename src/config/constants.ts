@@ -17,11 +17,15 @@ export const PHYSICS = {
   airDrag: 0.0002, // Matter frictionAir per nominal 60 Hz frame
   linearDamping: 0.015, // per second; applied as a force, never a velocity reset
   angularDamping: 0.025, // per second; applied as torque
-  swingForce: 0.00085,
-  rotationTorque: 0.10,
-  legRaiseStrength: 7,
-  legRaiseTargetAngle: -2.6,
-  tuckStrength: 3.2,
+  poseStrength: 7,
+  baseHipAngle: -2.6,
+  baseKneeAngle: 0.3,
+  baseWaistAngle: -0.3,
+  tuckHipAngle: -2.75,
+  tuckKneeAngle: 2.7,
+  tuckWaistAngle: -0.38,
+  waistMinAngle: -0.46,
+  waistMaxAngle: 0.08,
   twistTorque: 0.9, // axial N*m, separate from Matter's planar torque units
   poseTransitionSpeed: 7,
   autoGrabDistance: 38,

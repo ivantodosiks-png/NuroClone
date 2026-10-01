@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { COLORS, PHYSICS, TRAINING } from '../config/constants';
 import { JointMotor } from '../physics/JointMotor';
-import { Matter, worldPoint, wrapAngle, type Body, type Constraint, type Point } from '../physics/matter';
+import { Matter, worldPoint, wrapAngle, rotate, type Body, type Constraint, type Point } from '../physics/matter';
 
-export type Pose = 'neutral' | 'raise' | 'tuck';
+export type Pose = 'base' | 'straight' | 'tuck';
 export type Side = 'left' | 'right';
 type Bone = { body: Body; length: number; width: number };
 export type Hand = { side: Side; body: Body; local: Point };
@@ -17,14 +17,14 @@ export class Gymnast {
   readonly torso: Body;
   readonly pelvis: Body;
   readonly head: Body;
-  pose: Pose = 'neutral';
+  pose: Pose = 'base';
   private readonly bones = new Map<string, Bone>();
   private readonly limbMotors = new Map<string, JointMotor>();
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly group = Matter.Body.nextGroup(true);
+  private readonly waistStops: Constraint[] = [];
   private tuckAmount = 0;
-  private raiseAmount = 0;
-  private drive = 0;
+  private bentAmount = 0;
   private axialMomentum = 0;
   twistAngle = 0;
   twistVelocity = 0; // radians/second
@@ -41,6 +41,27 @@ export class Gymnast {
     this.bodies.push(this.head);
     this.joint('neck', this.torso, this.head, { x, y: y + 84 }, 0, 0.8);
     this.joint('spine', this.torso, this.pelvis, { x, y: y + 132 }, 0, 1.6);
+    // The existing pelvis is the lower torso: keep the chest rigid and limit the
+    // single waist hinge with two slack physical stops, rather than more bones.
+    for (const side of [-1, 1]) {
+      const angle = side < 0 ? PHYSICS.waistMinAngle : PHYSICS.waistMaxAngle;
+      const end = rotate({ x: 0, y: 18 }, angle);
+      const maxLength = Math.hypot(end.x - side * 18, end.y + 16);
+      const stop = scene.matter.add.constraint(this.torso, this.pelvis, maxLength, 1, {
+          label: 'waist-stop',
+          pointA: { x: side * 18, y: y + 132 - this.torso.position.y - 16 },
+          pointB: { x: 0, y: y + 132 - this.pelvis.position.y + 18 },
+          damping: 0,
+        });
+      // A maximum-distance brace: inside its limit the solver sees its current
+      // length (zero force); beyond it, the rigid brace blocks further bending.
+      // Evaluate on every solver iteration, including immediately after impacts.
+      Object.defineProperty(stop, 'length', { get: () => Math.min(maxLength, Math.hypot(
+        this.pelvis.position.x + stop.pointB.x - this.torso.position.x - stop.pointA.x,
+        this.pelvis.position.y + stop.pointB.y - this.torso.position.y - stop.pointA.y,
+      )) });
+      this.waistStops.push(stop);
+    }
 
     for (const side of ['left', 'right'] as const) {
       // Sagittal silhouette: matching limb lengths, only 5 px between near/far limbs.
@@ -104,36 +125,39 @@ export class Gymnast {
     this.limbMotors.set(name, motor);
   }
 
-  step(direction: number, pose: Pose, gripAnchor: Point | null, twisting = false, grounded = false, deltaMs = PHYSICS.stepMs): void {
+  step(pose: Pose, gripAnchor: Point | null, twisting = false, grounded = false, deltaMs = PHYSICS.stepMs): void {
     const grabbed = gripAnchor !== null;
     this.pose = pose;
     const dt = deltaMs / 1000;
     const blend = 1 - Math.exp(-PHYSICS.poseTransitionSpeed * dt);
     this.tuckAmount += ((pose === 'tuck' ? 1 : 0) - this.tuckAmount) * blend;
-    this.raiseAmount += ((pose === 'raise' ? 1 : 0) - this.raiseAmount) * blend;
-    this.drive += (direction - this.drive) * (1 - Math.exp(-5 * dt));
+    this.bentAmount += ((pose === 'straight' ? 0 : 1) - this.bentAmount) * blend;
     const tuck = this.tuckAmount;
-    const raise = this.raiseAmount;
+    const bent = this.bentAmount;
     for (const [name, motor] of this.limbMotors) {
       let offset = 0;
       let strength = 1;
       if (name.includes('Hip')) {
-        offset = -2.4 * tuck + PHYSICS.legRaiseTargetAngle * raise;
-        strength += raise * PHYSICS.legRaiseStrength + tuck * PHYSICS.tuckStrength;
+        offset = PHYSICS.baseHipAngle * bent + (PHYSICS.tuckHipAngle - PHYSICS.baseHipAngle) * tuck;
+        strength += PHYSICS.poseStrength;
       }
       if (name.includes('Knee')) {
-        offset = 2.6 * tuck;
-        strength += raise * PHYSICS.legRaiseStrength + tuck * PHYSICS.tuckStrength;
+        offset = PHYSICS.baseKneeAngle * bent + (PHYSICS.tuckKneeAngle - PHYSICS.baseKneeAngle) * tuck;
+        strength += PHYSICS.poseStrength;
       }
-      if (name.includes('Shoulder')) offset = (grabbed ? 0 : 1.9) * tuck;
-      if (name.includes('Elbow')) offset = (grabbed ? -0.2 : -1.5) * tuck;
-      if (name === 'spine') { offset = -0.18 * tuck - 0.12 * raise; strength = 2; }
+      if (name.includes('Shoulder')) offset = (grabbed ? 0.65 : 1.9) * tuck;
+      if (name.includes('Elbow')) offset = (grabbed ? -1.25 : -1.5) * tuck;
+      if (name === 'spine') {
+        offset = PHYSICS.baseWaistAngle * bent + (PHYSICS.tuckWaistAngle - PHYSICS.baseWaistAngle) * tuck;
+        strength = 18;
+      }
+      if (name === 'neck' || name.includes('Shoulder') || name.includes('Elbow')) strength = 4;
       motor.target = motor.restAngle + offset;
-      motor.step(strength);
+      motor.step(strength, deltaMs);
     }
 
-    // Fixed total torque: tucking decreases actual planar inertia, increasing spin.
-    const totalInertia = this.bodies.reduce((sum, body) => sum + body.inertia, 0);
+    // All driving torques come from equal/opposite joint muscles. Pose changes
+    // pump the pendulum through its support; there is no external swing force.
     for (const body of this.bodies) {
       // Gentle aerodynamic resistance. Matter velocity is normalized to 60 Hz;
       // convert to px/ms and rad/ms for its force/torque integration.
@@ -142,16 +166,6 @@ export class Gymnast {
         y: -body.mass * body.velocity.y / (1000 / 60) * PHYSICS.linearDamping / 1000,
       });
       body.torque -= body.inertia * body.angularVelocity / (1000 / 60) * PHYSICS.angularDamping / 1000;
-      body.torque -= this.drive * PHYSICS.rotationTorque * body.inertia / totalInertia;
-      if (gripAnchor && Math.abs(this.drive) > 0.001) {
-        const dx = body.position.x - gripAnchor.x;
-        const dy = body.position.y - gripAnchor.y;
-        const distance = Math.max(40, Math.hypot(dx, dy));
-        Matter.Body.applyForce(body, body.position, {
-          x: this.drive * dy / distance * body.mass * PHYSICS.swingForce,
-          y: -this.drive * dx / distance * body.mass * PHYSICS.swingForce,
-        });
-      }
     }
     this.stepTwist(twisting, grabbed, grounded, dt);
   }
@@ -274,6 +288,7 @@ export class Gymnast {
   }
 
   destroy(): void {
+    for (const stop of this.waistStops) this.scene.matter.world.removeConstraint(stop);
     for (const joint of this.joints) this.scene.matter.world.removeConstraint(joint);
     for (const body of this.bodies) this.scene.matter.world.remove(body);
     this.graphics.destroy();

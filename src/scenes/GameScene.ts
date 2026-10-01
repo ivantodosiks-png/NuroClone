@@ -120,7 +120,7 @@ export class GameScene extends Phaser.Scene {
             b.bounds.max.x > bar.x - 100 && b.bounds.min.x < bar.x + 100
             && b.bounds.max.y >= bar.y + TRAINING.platformDrop - 2
             && b.bounds.min.y <= bar.y + TRAINING.platformDrop + 3));
-          this.gymnast.step(this.controller.direction, this.controller.pose, this.grabs.anchor, this.controller.twist, grounded, step);
+          this.gymnast.step(this.controller.pose, this.grabs.anchor, this.controller.twist, grounded, step);
           this.matter.world.step(step);
         }
         this.accumulator -= PHYSICS.stepMs;

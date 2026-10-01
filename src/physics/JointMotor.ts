@@ -14,13 +14,18 @@ export class JointMotor {
     this.target = restAngle;
   }
 
-  step(stiffness = 1, maxAcceleration = 0.0012): void {
+  step(stiffness = 1, deltaMs = 1000 / 120): void {
     const error = wrapAngle(this.target - (this.child.angle - this.parent.angle));
     // Matter angularVelocity is normalized to 60 Hz. Convert to radians/ms.
     const speed = (this.child.angularVelocity - this.parent.angularVelocity) / (1000 / 60);
     const inertia = 1 / (this.parent.inverseInertia + this.child.inverseInertia);
-    const acceleration = error * 0.00032 * stiffness - speed * 0.036 * Math.sqrt(stiffness);
-    const torque = clamp(acceleration, -maxAcceleration, maxAcceleration) * inertia * this.strength;
+    // Implicit PD coefficients keep strong muscles stable at every collision
+    // substep; explicit high-gain damping would alternate torques and shake.
+    const spring = 0.00032 * stiffness * this.strength;
+    const damping = 0.036 * Math.sqrt(stiffness) * this.strength;
+    const acceleration = (error * spring - speed * (damping + spring * deltaMs))
+      / (1 + damping * deltaMs + spring * deltaMs * deltaMs);
+    const torque = clamp(acceleration, -0.0012, 0.0012) * inertia;
     this.child.torque += torque;
     this.parent.torque -= torque;
   }
