@@ -34,7 +34,7 @@ export class Gymnast {
   constructor(private readonly scene: Phaser.Scene) {
     const { x } = TRAINING.bar;
     // Begin below the solid bar, without any collider overlap at zero velocity.
-    const y = TRAINING.bar.y + TRAINING.barHeight / 2 + 5;
+    const y = TRAINING.bar.y + TRAINING.barHeight / 2 + 1;
     this.graphics = scene.add.graphics().setDepth(5);
     this.torso = this.bone('torso', { x, y: y + 88 }, { x, y: y + 132 }, 17, 4.2);
     this.pelvis = this.bone('pelvis', { x, y: y + 132 }, { x, y: y + 153 }, 24, 2.5);
@@ -66,8 +66,8 @@ export class Gymnast {
     }
 
     for (const side of ['left', 'right'] as const) {
-      // Almost one side-view silhouette, with separate bodies for both hands.
-      const offset = side === 'left' ? -1 : 1;
+      // Identical side-view anchors: two physical limbs share one silhouette.
+      const offset = 0;
       const shoulder = { x: x + offset, y: y + 91 };
       const elbow = { x: x + offset + 6, y: y + 47 };
       const wrist = { x: x + offset + 4, y: y + 2 };
@@ -91,7 +91,7 @@ export class Gymnast {
       const right = this.bones.get(`right${part}`)!;
       const a = worldPoint(left.body, { x: 0, y: left.length / 2 });
       const b = worldPoint(right.body, { x: 0, y: right.length / 2 });
-      this.pairedLimbs.push(scene.matter.add.constraint(left.body, right.body, 2, 1, {
+      this.pairedLimbs.push(scene.matter.add.constraint(left.body, right.body, 0, 1, {
         label: `paired:${part}`,
         pointA: { x: a.x - left.body.position.x, y: a.y - left.body.position.y },
         pointB: { x: b.x - right.body.position.x, y: b.y - right.body.position.y },
@@ -154,19 +154,29 @@ export class Gymnast {
       * (1 - Math.exp(-PHYSICS.releasePoseTransitionSpeed * dt));
     const tuck = this.tuckAmount;
     const bent = this.bentAmount;
+    const waistAngle = wrapAngle(this.pelvis.angle - this.torso.angle);
+    const shoulderFold = PHYSICS.baseShoulderAngle * bent
+      + ((1.9 - 1.65 * this.supportedPose) - PHYSICS.baseShoulderAngle) * tuck;
+    const elbowFold = PHYSICS.baseElbowAngle * bent
+      + ((-1.5 + 0.25 * this.supportedPose) - PHYSICS.baseElbowAngle) * tuck;
     for (const [name, motor] of this.limbMotors) {
       let offset = 0;
       let strength = 1;
       if (name.includes('Hip')) {
         offset = PHYSICS.baseHipAngle * bent + (PHYSICS.tuckHipAngle - PHYSICS.baseHipAngle) * tuck;
+        // Limit the TOTAL thigh fold relative to the chest. Adding waist and
+        // hip flexion independently previously pushed the legs behind the body.
+        offset = Math.max(offset, -PHYSICS.maxThighFold - waistAngle);
         strength += PHYSICS.poseStrength;
       }
       if (name.includes('Knee')) {
         offset = PHYSICS.baseKneeAngle * bent + (PHYSICS.tuckKneeAngle - PHYSICS.baseKneeAngle) * tuck;
         strength += PHYSICS.poseStrength;
       }
-      if (name.includes('Shoulder')) offset = (1.9 - 1.25 * this.supportedPose) * tuck;
-      if (name.includes('Elbow')) offset = (-1.5 + 0.25 * this.supportedPose) * tuck;
+      // Coordinate shoulders/elbows with the waist: the chest tilts and rises,
+      // carrying the pelvis upward instead of only rotating the thighs in place.
+      if (name.includes('Shoulder')) offset = shoulderFold;
+      if (name.includes('Elbow')) offset = elbowFold;
       if (name === 'spine') {
         offset = PHYSICS.baseWaistAngle * bent + (PHYSICS.tuckWaistAngle - PHYSICS.baseWaistAngle) * tuck;
         strength = 24;

@@ -43,7 +43,7 @@ test('minimal menu, controls, no HUD, side-view scene and two-hand start', async
   expect(s.bars.every(bar => !bar.isSensor)).toBe(true);
   expect(Math.abs(s.hands[0].x-s.hands[1].x)).toBeLessThan(9);
   expect(Math.abs(s.feet[0].x-s.feet[1].x)).toBeLessThan(12);
-  expect(s.jointAngles.rightHip).toBeLessThan(-2);
+  expect(s.jointAngles.rightHip).toBeLessThan(-1.8);
   expect(s.jointAngles.spine).toBeLessThan(-0.15);
   expect(Math.max(...s.joints.map(j=>j.error))).toBeLessThan(2);
   await page.screenshot({path:'test-results/sandbox.png'});
@@ -62,15 +62,17 @@ test('high base pose, W straight, stronger L tuck and smooth return', async ({pa
     return poses;
   `) as Snapshot[];
   const [base,straight,afterW,tuck,afterL]=poses;
+  console.log(poses.map(s=>({pose:s.pose,angles:s.jointAngles,pelvis:s.bodies.find(b=>b.label==='nuro:pelvis'),feet:s.feet,inertia:s.inertia})));
   for(const s of [base,afterW,afterL]){
     expect(s.pose).toBe('base');
-    expect(s.jointAngles.rightHip).toBeLessThan(-2.35);
-    expect(s.jointAngles.rightKnee).toBeGreaterThan(0.15);
+    expect(s.jointAngles.rightHip).toBeLessThan(-1.8);
+    expect(s.jointAngles.rightHip+s.jointAngles.spine).toBeGreaterThan(-2.85);
+    expect(s.jointAngles.rightKnee).toBeGreaterThan(0.08);
     expect(s.jointAngles.rightKnee).toBeLessThan(0.5);
     expect(s.jointAngles.spine).toBeLessThan(-0.15);
-    expect(s.jointAngles.spine).toBeGreaterThan(-0.4);
+    expect(s.jointAngles.spine).toBeGreaterThan(-0.55);
     expect(Math.abs(s.jointAngles.neck)).toBeLessThan(0.1);
-    expect(Math.abs(s.jointAngles.rightShoulder)).toBeLessThan(0.2);
+    expect(Math.abs(s.jointAngles.rightShoulder)).toBeLessThan(0.7);
     expect(Math.max(...s.feet.map(f=>f.y))).toBeLessThan(straight.feet[0].y-120);
     expect(Math.abs(s.hands[0].x-s.hands[1].x)).toBeLessThan(12);
   }

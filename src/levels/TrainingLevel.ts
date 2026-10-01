@@ -34,17 +34,17 @@ export class TrainingLevel {
       const spec = BARS[i];
       const body = scene.matter.add.rectangle(spec.x, spec.y, spec.halfWidth * 2, TRAINING.barHeight, {
         isStatic: true, isSensor: false, label: `bar:${i}`,
-        chamfer: { radius: 7 }, friction: 0.12, frictionStatic: 0.2, restitution: 0.08, slop: 0.01,
+        chamfer: { radius: 3 }, friction: 0.12, frictionStatic: 0.2, restitution: 0.08, slop: 0.01,
       });
       this.bars.push({ ...spec, id: i, body });
-      // Side-view apparatus. The muted upright is behind the play plane;
-      // the outlined crossbar is the solid collider and the two-hand grip anchor.
-      scenery.lineStyle(6, 0x9bafa6).lineBetween(spec.x, spec.y + 9, spec.x, TRAINING.groundY);
-      scenery.lineStyle(3, 0xb8c7bc).lineBetween(spec.x - 1, spec.y + 10, spec.x - 1, TRAINING.groundY);
-      scenery.fillStyle(0x829968).fillEllipse(spec.x + 5, TRAINING.groundY + 5, 46, 8);
-      scenery.fillStyle(COLORS.ink).fillRoundedRect(spec.x - spec.halfWidth, spec.y - TRAINING.barHeight / 2, spec.halfWidth * 2, TRAINING.barHeight, 7);
-      scenery.lineStyle(2, 0x70938a).strokeRoundedRect(spec.x - spec.halfWidth, spec.y - TRAINING.barHeight / 2, spec.halfWidth * 2, TRAINING.barHeight, 7);
-      scenery.lineStyle(2, COLORS.lime).lineBetween(spec.x - 7, spec.y, spec.x + 7, spec.y);
+      // A level beam between two vertical posts; the muted posts are scenery
+      // behind the play plane. The entire visible beam has a matching collider.
+      for (const postX of [spec.x - spec.halfWidth, spec.x + spec.halfWidth]) {
+        scenery.fillStyle(0x8ca59e).fillRect(postX - 4, spec.y, 8, TRAINING.groundY - spec.y);
+        scenery.fillStyle(0x829968).fillEllipse(postX, TRAINING.groundY + 4, 24, 6);
+      }
+      scenery.fillStyle(COLORS.ink).fillRoundedRect(spec.x - spec.halfWidth, spec.y - TRAINING.barHeight / 2, spec.halfWidth * 2, TRAINING.barHeight, 3);
+      scenery.lineStyle(2, 0x70938a).lineBetween(spec.x - spec.halfWidth + 3, spec.y - 4, spec.x + spec.halfWidth - 3, spec.y - 4);
     }
     this.shadow = scene.add.graphics().setDepth(-2);
   }

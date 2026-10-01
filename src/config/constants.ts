@@ -19,13 +19,16 @@ export const PHYSICS = {
   angularDamping: 0.025, // per second; applied as torque
   poseStrength: 11,
   straightStiffness: 2,
-  baseHipAngle: -2.78,
+  baseHipAngle: -2.25,
   baseKneeAngle: 0.18,
-  baseWaistAngle: -0.36,
-  tuckHipAngle: -2.94,
+  baseWaistAngle: -0.42,
+  baseShoulderAngle: -0.4,
+  baseElbowAngle: -0.55,
+  maxThighFold: 2.7,
+  tuckHipAngle: -2.55,
   tuckKneeAngle: 2.8,
-  tuckWaistAngle: -0.43,
-  waistMinAngle: -0.5,
+  tuckWaistAngle: -0.48,
+  waistMinAngle: -0.55,
   waistMaxAngle: 0.08,
   twistTorque: 2.2, // axial N*m, separate from Matter's planar torque units
   poseTransitionSpeed: 7,
@@ -38,13 +41,13 @@ export const PHYSICS = {
 
 // Side-view bars: the drawn capsule and the solid collider have identical bounds.
 export const BARS = [
-  { x: 860, y: 242, halfWidth: 14 },
-  { x: 1400, y: 190, halfWidth: 14 },
+  { x: 860, y: 242, halfWidth: 70 },
+  { x: 1400, y: 190, halfWidth: 70 },
 ];
 
 export const TRAINING = {
   bar: BARS[0],
-  barHeight: 18,
+  barHeight: 12,
   groundY: 527,
   fallLimit: 1550,
   left: -1000,
