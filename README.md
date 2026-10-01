@@ -1,183 +1,95 @@
-# RAGELAB
+# NuroClone
 
-Browser multiplayer sandbox FPS. The client renders in Three.js, predicts movement locally, and talks to an authoritative Node.js game server over WebSockets. Persistent accounts, profiles, cosmetics and statistics live in the existing Supabase project.
+Браузерная игра для ПК о физической гимнастике. Первая сцена — перекладина, мягкий мат и свобода экспериментировать с инерцией. Интерфейс на русском языке.
 
-This is a real vertical slice, not a mock: two players can join a room, move, shoot, take damage, die, respawn, throw props and hear spatial audio.
+## Запуск
 
-## Requirements
+Нужен Node.js **22.12+** (или 20.19+).
 
-- Node.js 20.11 or newer
-- A configured `.env` (copy from `.env.example`)
-- The existing Supabase project already referenced by that file
-
-## Install
-
-```bash
+```sh
 npm install
-```
-
-## Environment
-
-Copy `.env.example` to `.env` if you do not already have one. Use the **names that are already in the repo**. Do not invent new database credentials.
-
-Public values (safe for the browser bundle):
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `VITE_GAME_SERVER_URL` (default `ws://localhost:8080`)
-- `VITE_GAME_SERVER_HTTP_URL` (default `http://localhost:8080`)
-
-Server-only values (never sent to the client):
-
-- `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY`
-- `SUPABASE_JWT_SECRET`
-- `POSTGRES_*` (used only by `npm run db:migrate`)
-
-Game server:
-
-- `GAME_SERVER_PORT` (default `8080`)
-- `GAME_SERVER_ALLOW_GUESTS=true` for local play without an account
-- `GAME_SERVER_PERSIST=true` to mirror rooms into Supabase for the server browser
-
-Vite reads the monorepo `.env` and injects only the public Supabase URL/anon key plus the game-server URLs. Service-role keys are not referenced by the client config.
-
-## Database
-
-Supabase is already set up. Schema lives in `supabase/migrations/`. Apply migrations only when you need to:
-
-```bash
-npm run db:migrate
-```
-
-Do not edit production tables by hand. Add a new migration file if the schema must change.
-
-## Run (development)
-
-From the repo root, one command starts both processes:
-
-```bash
 npm run dev
 ```
 
-- Game server: `ws://localhost:8080` and `http://localhost:8080/health`
-- Client: `http://localhost:5173`
+Откройте адрес из терминала, обычно **http://127.0.0.1:5173**. Нажмите «Начать тренировку» или Enter. В Windows при запрете запуска `npm.ps1` используйте `npm.cmd install` и `npm.cmd run dev`.
 
-Or separately:
+Шрифт включён в проект через npm. Во время игры сеть, аккаунты и внешние ресурсы не нужны.
 
-```bash
-npm run dev:server
-npm run dev:client
-```
+## Управление
 
-Open the client URL, click **Play**. Guest join works when `GAME_SERVER_ALLOW_GUESTS=true`.
-
-### Local two-player test
-
-1. Start `npm run dev`.
-2. Open `http://localhost:5173` in two browser windows (or one window plus an incognito window).
-3. Click **Play** in both. They should land in the same auto-matched room on Rage Yard.
-4. Click the canvas to capture the mouse. WASD to move, mouse to look, left click to fire.
-
-If the second window joins an empty extra room, join the listed room from **Servers** instead.
-
-### LAN — other PCs on the same Wi‑Fi
-
-Do **not** send friends `http://localhost:5173`. That address only works on your computer.
-
-1. Start `npm run dev` on the host PC.
-2. In the Vite log, copy the **Network** URL, e.g. `http://192.168.1.42:5173`.
-3. Friends open that URL. The client proxies the game WebSocket through the same host, so they do not need port 8080.
-4. If the page itself will not load, allow Node.js inbound on port **5173** in Windows Firewall (Private network).
-
-## Controls (defaults)
-
-| Action | Binding |
+| Клавиша | Действие |
 | --- | --- |
-| Move | WASD |
-| Look | Mouse |
-| Jump | Space |
-| Sprint | Shift |
-| Crouch | C |
-| Fire | Mouse 1 |
-| Aim | Mouse 2 |
-| Reload | R |
-| Interact / pick up | E |
-| Drop prop | G |
-| Weapons | 1–5 / mouse wheel |
-| Scoreboard | Tab |
-| Chat | T |
-| Pause | Escape (releases mouse) |
-| Debug overlay | F3 |
+| A / D | Раскачиваться на перекладине; вращать тело в полёте |
+| W | Группировка: согнуть бёдра, колени и локти |
+| S | Распрямление / небольшой прогиб |
+| Space | Отпустить все активные хваты; повторное нажатие — схватиться рядом с перекладиной |
+| R | Мгновенно начать попытку заново |
+| Esc | Пауза / продолжение |
 
-While carrying a crate or barrel, left click throws it.
+Удерживайте A и D попеременно в ритм качания. W меняет момент инерции; отпустите перекладину на подъёме. Для повторного хвата приблизьте кисть к тёмной центральной части перекладины и нажмите Space. Руки хватаются независимо: возможно удержание одной или двумя руками. У нажатия есть буфер 240 мс; издалека схватиться нельзя. После приземления нажмите R для следующей попытки.
 
-## Architecture
+При потере фокуса игра автоматически ставится на паузу. В меню паузы доступны продолжение, новая попытка и возврат к стартовому экрану. Верхняя кнопка разворачивает игру на полный экран.
 
+## Физическая модель
+
+- Phaser **3.90** и встроенная в него версия **Matter.js**. Отдельный экземпляр Matter не подключается.
+- **11 rigid bodies**: голова, корпус, таз, по две части каждой руки и ноги. Кисти — конечные точки предплечий. **10 физических constraints** соединяют части тела.
+- Суставные PD-моторы прикладывают равные противоположные моменты к связанным частям. W/S плавно меняют целевые относительные углы. A/D добавляют моменты; при хвате — касательную силу для раскачивания.
+- Шаг физики **120 Гц**, аккумулятор времени, не более 50 мс симуляции за кадр. На очень медленном устройстве симуляция замедляется вместо нестабильных больших шагов.
+- Хват — отдельный constraint между статической перекладиной и концом предплечья. Его длина равна расстоянию в момент захвата: положения и скорости не перезаписываются. Отпускание удаляет только constraint. Радиус захвата 34 пикселя.
+- Столкновения с полом и матом; столкновения частей Nuro друг с другом отключены для устойчивой 2D-модели. Опоры перекладины — декорации, сама зона хвата — sensor.
+- Основное движение не содержит кадровой анимации, телепортации или записи координат персонажа каждый кадр. Начальные углы задаются только при создании тела. Камера плавно следует за центром масс.
+- Векторная сцена рисуется Phaser Canvas Renderer. HTML/CSS используются только для меню и HUD. Фон использует повторяемую текстуру вместо тысяч отдельных примитивов.
+
+Это управляемая аркадная физическая модель, без симуляции мышц человека. На земле Nuro остаётся ragdoll: ходьба и автоматический подъём не входят в первую тренировку.
+
+## Структура
+
+```text
+src/
+  config/constants.ts         Палитра, параметры мира и физики
+  levels/TrainingLevel.ts     Перекладина, мат, пол, фон, след движения
+  physics/matter.ts           Типы и функции работы с Matter
+  physics/JointMotor.ts       Моторы суставов на основе torque
+  player/Gymnast.ts           Составное тело, позы, отрисовка
+  player/PlayerController.ts  Клавиатура и буфер коротких нажатий
+  player/GrabSystem.ts        Независимые физические хваты
+  scenes/GameScene.ts         Игровой цикл, камера, рестарт, пауза
+  scenes/MenuScene.ts         Стартовое меню
+  ui/HUD.ts                  Управление, обучение, телеметрия
+  ui/styles.css              Интерфейс
+  main.ts                    Запуск Phaser
+tests/game.spec.ts           Интеграционные проверки в браузере
 ```
-client/   Three.js renderer, prediction, interpolation, HUD, Supabase auth
-server/   Authoritative simulation, combat, physics, rooms, anti-cheat
-shared/   Protocol, weapons, maps, movement, constants
-supabase/ SQL migrations and generated table types
-```
 
-High-frequency gameplay (position, shots, physics) never goes through Supabase Realtime. The Node server is the authority. The client sends **intent** (input + fire button). The server decides hits and damage.
+Телеметрия показывает FPS, скорость центра масс в м/с, угловую скорость корпуса в рад/с и число хватов. Масштаб: 95 пикселей на метр.
 
-## Production build
+## Проверки и сборка
 
-```bash
-npm run build
-npm start          # serves the compiled game server from server/dist
-npm run preview    # optional: Vite preview of the client on :4173
-```
-
-Point `VITE_GAME_SERVER_URL` at the public WebSocket URL of the game server before building the client. Serve `client/dist` behind any static host. Keep service-role keys on the server only.
-
-Health check for orchestrators: `GET /health`. Room list: `GET /rooms`.
-
-### Vercel (client only)
-
-Vite emits `client/dist`, not `public`. The repo root `vercel.json` sets:
-
-- **Build Command:** `npm run build:client`
-- **Output Directory:** `client/dist`
-- **Root Directory:** repository root (leave empty / `.`)
-
-If the dashboard still says `No Output Directory named "public"`, open **Project Settings → Build & Development** and set those three fields to the same values. Framework Preset should be **Other** (not Next.js).
-
-Add these **public** env vars on Vercel (Settings → Environment Variables). Do not add service-role keys or JWT secrets:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `VITE_GAME_SERVER_URL` (e.g. `wss://your-game-server.example.com`)
-- `VITE_GAME_SERVER_HTTP_URL` (e.g. `https://your-game-server.example.com`)
-
-The authoritative WebSocket game server is a long-lived Node process. It does **not** run on Vercel. Host it on a VPS, Fly.io, Railway, or similar, then point the two `VITE_GAME_SERVER_*` variables at that URL.
-
-## Typecheck
-
-```bash
+```sh
 npm run typecheck
+npm run build
+npm run preview
 ```
 
-## Troubleshooting
+`typecheck` проверяет исходники, тесты и конфигурации. Готовая статическая игра находится в `dist/`.
 
-**Client stuck on “Connecting…”**  
-The game server is not running, or `VITE_GAME_SERVER_URL` does not match `GAME_SERVER_PORT`. Check `http://localhost:8080/health`.
+Браузерные тесты:
 
-**“this server requires a signed-in account”**  
-Set `GAME_SERVER_ALLOW_GUESTS=true`, or sign in. The handshake sends the Supabase access token; the server verifies it with `SUPABASE_JWT_SECRET` / the service role.
+```sh
+npx playwright install chromium
+npm test
+```
 
-**“profile not found for this account”**  
-The `handle_new_user` trigger in `0001_init.sql` should create a profile on signup. Confirm migrations were applied and the user was created through Supabase Auth (not a raw `auth.users` insert).
+Для уже установленного Chrome можно не скачивать Chromium. В PowerShell:
 
-**No audio**  
-The audio graph starts on the Play click (browser autoplay policy). If you joined without a gesture, click the canvas.
+```powershell
+$env:PLAYWRIGHT_CHANNEL = 'chrome'
+npm.cmd test
+```
 
-**Physics / Rapier fails to load**  
-Keep `@dimforge/rapier3d-compat` out of Vite’s pre-bundle (already excluded). A hard refresh after `npm install` is enough.
+Тесты проверяют состав тела, суставы под нагрузкой, раскачивание, смену позы, отпускание/повторный хват, отсутствие хвата издалека, паузу, приземление и отсутствие накопления тел/суставов при рестартах. Скриншоты сохраняются в `test-results/`. Только в dev-сборке доступен read-only снимок физики `window.__NURO__.snapshot()`.
 
-**Two players cannot see each other**  
-They are in different rooms. Use **Servers** and join the same room id. The process starts one warm room; Play auto-matches into the emptiest joinable room.
+## Ресурсы
 
-**Supabase errors in the browser**  
-Only anon/publishable keys belong in the client. If URL/anon key are empty, guest play still works; accounts, profile and the mirrored server browser do not.
+Вся графика нарисована программно. Шрифт Golos Text — SIL Open Font License, поставляется пакетом `@fontsource-variable/golos-text`. Phaser — MIT. [Документация Matter Physics в Phaser](https://docs.phaser.io/phaser/concepts/physics/matter).

@@ -1,34 +1,8 @@
 node_modules/
 dist/
-build/
 .vite/
-*.tsbuildinfo
-
-# Secrets - never commit
-.env
-.env.local
-.env.*.local
-!.env.example
-
-# Logs
+test-results/
+playwright-report/
+.npm-cache/
 *.log
-npm-debug.log*
-
-# Editor / OS
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/*
-!.vscode/extensions.json
-
-# Local asset scratch (downloads, gltf-transform, FBX sources)
-tmp-assets/
-assets/_dl/
-
-# Oversized source masters (optimize into client/public/models — GitHub 100MB limit)
-assets/m4/*.glb
-
-# BSP>GLB conversion scratch
-tools/hlbsp/
-assets/map cs/_2000/out/
-
+.env
