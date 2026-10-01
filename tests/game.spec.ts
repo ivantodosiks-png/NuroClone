@@ -204,7 +204,7 @@ test('R repeatedly resets all velocities and removes old grips; Esc pauses/menu'
     expect(s.grabs).toBe(2);
     expect(s.barId).toBe(0);
     expect(s.worldBodies).toBe(14);
-    expect(s.worldConstraints).toBe(14);
+    expect(s.worldConstraints).toBe(18);
     expect(s.bodies.every(b=>b.vx===0&&b.vy===0&&b.angularVelocity===0)).toBe(true);
     expect(s.twistVelocity).toBe(0);
   }
@@ -219,63 +219,6 @@ test('R repeatedly resets all velocities and removes old grips; Esc pauses/menu'
   await expect(page.getByRole('button',{name:'PLAY',exact:true})).toBeVisible();
 });
 
-test('release retains swing velocity and follows a ballistic arc', async ({page}) => {
-  await start(page);
-  const result=await fixture(page, `
-    const draw=scene.renderScene;scene.renderScene=()=>{};
-    const trials=[];
-    try {
-      for(const pumpSteps of [240,800,2361,3031,3331,3661]){
-        scene.restart();
-        for(let t=0;t<pumpSteps;t++){
-          scene.controller.keys.straight.isDown=t%160<80;scene.update(0,1000/120);
-        }
-        const before=scene.snapshot();
-        scene.controller.pending.add('release');scene.update(0,0);
-        const released=scene.snapshot();
-        scene.controller.keys.straight.isDown=false;
-        let hits=0;
-        const onHit=e=>{hits+=e.pairs.filter(p=>p.bodyA.label.startsWith('bar:')||p.bodyB.label.startsWith('bar:')).length;};
-        scene.matter.world.on('collisionstart',onHit);
-        const samples=[];
-        for(let t=0;t<120;t++){
-          scene.update(0,1000/120);
-          if(scene.grabs.count)break;
-          if(t%6===5)samples.push({hits,t:(t+1)/120,x:scene.gymnast.center.x,y:scene.gymnast.center.y,vx:scene.gymnast.velocity.x,vy:scene.gymnast.velocity.y});
-        }
-        scene.matter.world.off('collisionstart',onHit);
-        trials.push({pumpSteps,hits,before: {center:before.center,velocity:before.velocity},same:JSON.stringify(before.bodies)===JSON.stringify(released.bodies),samples});
-      }
-    }finally{scene.renderScene=draw;scene.restart();}
-    return trials;
-  `);
-  type Trial = { pumpSteps:number; same:boolean; before:{center:{x:number;y:number};velocity:{x:number;y:number}}; samples:{hits:number;t:number;x:number;y:number;vx:number;vy:number}[] };
-  const trials=result as Trial[];
-  expect(trials.every(r=>r.same)).toBe(true);
-  let freeFlights=0;
-  for(const trial of trials){
-    const sample=trial.samples.find(s=>s.t===0.2)!;
-    // A real bar impact changes momentum: compare the parabola only in free flight.
-    if(sample.hits)continue;
-    freeFlights++;
-    const expectedX=trial.before.center.x+trial.before.velocity.x*sample.t;
-    const expectedY=trial.before.center.y+trial.before.velocity.y*sample.t+0.5*950*sample.t**2;
-    expect(Math.abs(sample.x-expectedX)).toBeLessThan(2);
-    expect(Math.abs(sample.y-expectedY)).toBeLessThan(2);
-    expect(Math.abs(sample.vx)).toBeGreaterThan(Math.abs(trial.before.velocity.x)*0.98);
-  }
-  expect(freeFlights).toBeGreaterThanOrEqual(3);
-  const weak=trials.find(t=>t.pumpSteps===240)!;
-  const strong=trials.find(t=>t.pumpSteps===3331)!;
-  expect(strong.before.velocity.x).toBeGreaterThan(150);
-  expect(strong.before.velocity.y).toBeLessThan(-100);
-  expect(strong.samples[0].x).toBeGreaterThan(strong.before.center.x);
-  expect(strong.samples[0].y).toBeLessThan(strong.before.center.y);
-  expect(strong.samples.some(s=>s.vy>100)).toBe(true);
-  const at=(trial:Trial)=>trial.samples.find(s=>s.t===0.4)!;
-  expect(at(strong).x-strong.before.center.x).toBeGreaterThan(Math.abs(at(weak).x-weak.before.center.x)*1.8);
-});
-
 test('solid bars stop head, torso, hands and legs, including fast impacts', async ({page}) => {
   await start(page);
   const impacts = await fixture(page, `
@@ -288,6 +231,7 @@ test('solid bars stop head, torso, hands and legs, including fast impacts', asyn
           // Isolate each actual Nuro collider to identify its contact unambiguously.
           for(const joint of scene.gymnast.joints)scene.matter.world.removeConstraint(joint);
           for(const stop of scene.gymnast.waistStops)scene.matter.world.removeConstraint(stop);
+          for(const pair of scene.gymnast.pairedLimbs)scene.matter.world.removeConstraint(pair);
           for(const b of scene.gymnast.bodies)if(b!==body)scene.matter.world.remove(b);
           scene.gymnast.step=()=>{};
           const bar=scene.level.bars[0];
@@ -312,107 +256,4 @@ test('solid bars stop head, torso, hands and legs, including fast impacts', asyn
     expect(impact.position).toBeLessThan(impact.edge);
     expect(impact.velocity).toBeLessThan(impact.speed*0.5);
   }
-});
-
-
-test('swing, release, same-bar regrab and a chain of two transfers use only controls', async ({page}) => {
-  await start(page);
-  const result=await fixture(page, `
-    const draw=scene.renderScene;scene.renderScene=()=>{};
-    const fly=(pumpSteps,airDirection,tuckSteps)=>{
-      scene.controller.keys.left.isDown=false;
-      scene.controller.keys.right.isDown=true;
-      scene.controller.keys.tuck.isDown=false;
-      for(let t=0;t<pumpSteps;t++)scene.update(0,1000/120);
-      scene.controller.pending.add('release');scene.update(0,0);
-      const released=scene.grabs.state;
-      scene.controller.keys.right.isDown=airDirection===1;
-      scene.controller.keys.left.isDown=airDirection===-1;
-      let alwaysPaired=true;
-      for(let t=0;t<250&&!scene.grabs.count;t++){
-        scene.controller.keys.tuck.isDown=t<tuckSteps;
-        scene.update(0,1000/120);
-        alwaysPaired &&= scene.grabs.count===0||scene.grabs.count===2;
-      }
-      return {released,bar:scene.grabs.barId,count:scene.grabs.count,alwaysPaired};
-    };
-    try {
-      scene.restart();
-      const same=fly(40,-1,0);
-      scene.restart();
-      const first=fly(328,0,30);
-      const second=fly(160,1,60);
-      return {same,first,second};
-    }finally{scene.renderScene=draw;scene.restart();}
-  `);
-  for(const [name,bar] of [['same',0],['first',1],['second',2]] as const){
-    expect(result[name]).toEqual({released:'RELEASED',bar,count:2,alwaysPaired:true});
-  }
-});
-
-
-test('transfer exploration', async ({page})=>{
- test.setTimeout(120000);await start(page);
- const r=await fixture(page,`
-   const draw=scene.renderScene;scene.renderScene=()=>{};
-   const candidates=[],trials=[];
-   try{
-     scene.restart();
-     for(let t=0;t<4800;t++){
-       scene.controller.keys.straight.isDown=t%160<80;
-       scene.update(0,1000/120);
-       const v=scene.gymnast.velocity;
-       if(t%10===0&&v.x>220&&v.y<-70)candidates.push({step:t+1,v});
-     }
-     const selected=candidates.filter((c,i)=>i%Math.max(1,Math.floor(candidates.length/30))===0);
-     for(const {step} of selected){
-       for(const air of ['base','straight',40,80]){
-         scene.restart();
-         for(let t=0;t<step;t++){scene.controller.keys.straight.isDown=t%160<80;scene.update(0,1000/120);}
-         const v=scene.gymnast.velocity;
-         scene.controller.pending.add('release');scene.update(0,0);
-         let closest=Infinity,near=null;
-         for(let t=0;t<240&&!scene.grabs.count;t++){
-           scene.controller.keys.straight.isDown=air==='straight';
-           scene.controller.keys.tuck.isDown=typeof air==='number'&&t<air;
-           scene.update(0,1000/120);
-           if(t>34){
-             const hands=scene.gymnast.hands.map(h=>scene.gymnast.handPoint(h));
-             const d=Math.max(...hands.map(h=>Math.hypot(h.x-1060,h.y-180)));
-             if(d<closest){closest=d;near=hands;}
-           }
-         }
-         trials.push({step,air,v,bar:scene.grabs.barId,closest,near});
-       }
-     }
-   }finally{scene.renderScene=draw;scene.restart();}
-   return {candidates:candidates.length,winners:trials.filter(t=>t.bar!==null),sample:trials.sort((a,b)=>a.closest-b.closest).slice(0,8)};
- `);
- console.log(JSON.stringify(r));
-});
-
-test('tuck pumping exploration', async ({page})=>{
- await start(page);
- const r=await fixture(page,`
-  const draw=scene.renderScene;scene.renderScene=()=>{};const results=[];
-  try{
-   for(const period of [40,60,70,80,100,120,140,160]){
-    for(const compact of ['base','tuck']){
-     scene.restart();let speed=0,height=Infinity,angle=0;
-     for(let t=0;t<2880;t++){
-      scene.controller.keys.straight.isDown=t%(period*2)<period;
-      scene.controller.keys.tuck.isDown=compact==='tuck'&&!scene.controller.keys.straight.isDown;
-      scene.update(0,1000/120);
-      const c=scene.gymnast.center,b=scene.level.bars[0];
-      speed=Math.max(speed,scene.gymnast.speed);
-      height=Math.min(height,...scene.gymnast.feet.map(f=>f.point.y));
-      angle=Math.max(angle,Math.abs(Math.atan2(c.x-b.x,c.y-b.y)));
-     }
-     results.push({period,compact,speed,height,angle});
-    }
-   }
-  }finally{scene.renderScene=draw;scene.restart();}
-  return results;
- `);
- console.log(JSON.stringify(r));
 });

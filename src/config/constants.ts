@@ -17,17 +17,19 @@ export const PHYSICS = {
   airDrag: 0.0002, // Matter frictionAir per nominal 60 Hz frame
   linearDamping: 0.015, // per second; applied as a force, never a velocity reset
   angularDamping: 0.025, // per second; applied as torque
-  poseStrength: 7,
-  baseHipAngle: -2.6,
-  baseKneeAngle: 0.3,
-  baseWaistAngle: -0.3,
-  tuckHipAngle: -2.75,
-  tuckKneeAngle: 2.7,
-  tuckWaistAngle: -0.38,
-  waistMinAngle: -0.46,
+  poseStrength: 11,
+  straightStiffness: 2,
+  baseHipAngle: -2.78,
+  baseKneeAngle: 0.18,
+  baseWaistAngle: -0.36,
+  tuckHipAngle: -2.94,
+  tuckKneeAngle: 2.8,
+  tuckWaistAngle: -0.43,
+  waistMinAngle: -0.5,
   waistMaxAngle: 0.08,
-  twistTorque: 0.9, // axial N*m, separate from Matter's planar torque units
+  twistTorque: 2.2, // axial N*m, separate from Matter's planar torque units
   poseTransitionSpeed: 7,
+  releasePoseTransitionSpeed: 4.5,
   autoGrabDistance: 38,
   autoGrabMaxVelocity: 16, // m/s at each hand, including angular velocity
   autoGrabCooldown: 280, // simulation ms
@@ -37,7 +39,7 @@ export const PHYSICS = {
 // Side-view bars: the drawn capsule and the solid collider have identical bounds.
 export const BARS = [
   { x: 860, y: 242, halfWidth: 14 },
-  { x: 1060, y: 180, halfWidth: 14 },
+  { x: 1400, y: 190, halfWidth: 14 },
 ];
 
 export const TRAINING = {

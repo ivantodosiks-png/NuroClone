@@ -23,8 +23,10 @@ export class Gymnast {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly group = Matter.Body.nextGroup(true);
   private readonly waistStops: Constraint[] = [];
+  private readonly pairedLimbs: Constraint[] = [];
   private tuckAmount = 0;
   private bentAmount = 0;
+  private supportedPose = 1;
   private axialMomentum = 0;
   twistAngle = 0;
   twistVelocity = 0; // radians/second
@@ -64,8 +66,8 @@ export class Gymnast {
     }
 
     for (const side of ['left', 'right'] as const) {
-      // Sagittal silhouette: matching limb lengths, only 5 px between near/far limbs.
-      const offset = side === 'left' ? -2.5 : 2.5;
+      // Almost one side-view silhouette, with separate bodies for both hands.
+      const offset = side === 'left' ? -1 : 1;
       const shoulder = { x: x + offset, y: y + 91 };
       const elbow = { x: x + offset + 6, y: y + 47 };
       const wrist = { x: x + offset + 4, y: y + 2 };
@@ -81,6 +83,20 @@ export class Gymnast {
       this.joint(`${side}Hip`, this.pelvis, thigh, hip, thigh.angle, 1.8);
       this.joint(`${side}Knee`, thigh, shin, knee, shin.angle - thigh.angle, 1.2);
       this.hands.push({ side, body: lowerArm, local: { x: 0, y: this.bones.get(`${side}LowerArm`)!.length / 2 } });
+    }
+    // Link corresponding elbows, wrists, knees and ankles. Together with the
+    // shoulder/hip joints this keeps each pair moving as one rigid limb.
+    for (const part of ['UpperArm', 'LowerArm', 'Thigh', 'Shin']) {
+      const left = this.bones.get(`left${part}`)!;
+      const right = this.bones.get(`right${part}`)!;
+      const a = worldPoint(left.body, { x: 0, y: left.length / 2 });
+      const b = worldPoint(right.body, { x: 0, y: right.length / 2 });
+      this.pairedLimbs.push(scene.matter.add.constraint(left.body, right.body, 2, 1, {
+        label: `paired:${part}`,
+        pointA: { x: a.x - left.body.position.x, y: a.y - left.body.position.y },
+        pointB: { x: b.x - right.body.position.x, y: b.y - right.body.position.y },
+        damping: 0,
+      }));
     }
   }
 
@@ -132,6 +148,10 @@ export class Gymnast {
     const blend = 1 - Math.exp(-PHYSICS.poseTransitionSpeed * dt);
     this.tuckAmount += ((pose === 'tuck' ? 1 : 0) - this.tuckAmount) * blend;
     this.bentAmount += ((pose === 'straight' ? 0 : 1) - this.bentAmount) * blend;
+    // Detaching changes support immediately, but muscles transition smoothly.
+    // In particular, releasing during L must not snap the shoulder target.
+    this.supportedPose += ((grabbed ? 1 : 0) - this.supportedPose)
+      * (1 - Math.exp(-PHYSICS.releasePoseTransitionSpeed * dt));
     const tuck = this.tuckAmount;
     const bent = this.bentAmount;
     for (const [name, motor] of this.limbMotors) {
@@ -145,15 +165,16 @@ export class Gymnast {
         offset = PHYSICS.baseKneeAngle * bent + (PHYSICS.tuckKneeAngle - PHYSICS.baseKneeAngle) * tuck;
         strength += PHYSICS.poseStrength;
       }
-      if (name.includes('Shoulder')) offset = (grabbed ? 0.65 : 1.9) * tuck;
-      if (name.includes('Elbow')) offset = (grabbed ? -1.25 : -1.5) * tuck;
+      if (name.includes('Shoulder')) offset = (1.9 - 1.25 * this.supportedPose) * tuck;
+      if (name.includes('Elbow')) offset = (-1.5 + 0.25 * this.supportedPose) * tuck;
       if (name === 'spine') {
         offset = PHYSICS.baseWaistAngle * bent + (PHYSICS.tuckWaistAngle - PHYSICS.baseWaistAngle) * tuck;
-        strength = 18;
+        strength = 24;
       }
-      if (name === 'neck' || name.includes('Shoulder') || name.includes('Elbow')) strength = 4;
+      if (name === 'neck' || name.includes('Shoulder') || name.includes('Elbow')) strength = 6;
       motor.target = motor.restAngle + offset;
-      motor.step(strength, deltaMs);
+      const straightRigidity = 1 + (PHYSICS.straightStiffness - 1) * (1 - bent);
+      motor.step(strength * straightRigidity, deltaMs);
     }
 
     // All driving torques come from equal/opposite joint muscles. Pose changes
@@ -261,7 +282,7 @@ export class Gymnast {
     };
     // Fixed side profile, including during K. Twist is shown by the suit seam,
     // never by yawing the face or separating the hands out of the play plane.
-    const leftColor = COLORS.farLimb;
+    const leftColor = COLORS.ink;
     const rightColor = COLORS.ink;
     for (const name of ['leftUpperArm', 'leftLowerArm', 'leftThigh', 'leftShin']) drawBone(name, leftColor);
     drawBone('torso', COLORS.ink, 16);
@@ -273,8 +294,8 @@ export class Gymnast {
       g.fillStyle(COLORS.lime).fillCircle(knee.x, knee.y, 3);
       const ankle = worldPoint(this.bones.get(`${side}Shin`)!.body, { x: 0, y: 21 });
       const toe = worldPoint(this.bones.get(`${side}Shin`)!.body, { x: 8, y: 21 });
-      g.lineStyle(8, side === 'left' ? COLORS.farLimb : COLORS.ink).lineBetween(ankle.x, ankle.y, toe.x, toe.y);
-      g.fillStyle(side === 'left' ? COLORS.farLimb : COLORS.ink).fillCircle(toe.x, toe.y, 4);
+      g.lineStyle(8, COLORS.ink).lineBetween(ankle.x, ankle.y, toe.x, toe.y);
+      g.fillStyle(COLORS.ink).fillCircle(toe.x, toe.y, 4);
     }
     const p = this.head.position;
     g.fillStyle(0xf5f5e9).fillCircle(p.x, p.y, 14);
@@ -288,6 +309,7 @@ export class Gymnast {
   }
 
   destroy(): void {
+    for (const pair of this.pairedLimbs) this.scene.matter.world.removeConstraint(pair);
     for (const stop of this.waistStops) this.scene.matter.world.removeConstraint(stop);
     for (const joint of this.joints) this.scene.matter.world.removeConstraint(joint);
     for (const body of this.bodies) this.scene.matter.world.remove(body);
